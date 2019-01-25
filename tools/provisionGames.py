@@ -22,6 +22,7 @@ def provision_game(line):
     # 3. Match the game name and capture it
     # 4. Skip over whitespace
     # 5. Match the group (major.minor)
+    # TODO: Evaluate this as a possible entry point
 
     reg = r'^\s*([\w\/\-.\_]+)\s+([\w\-.\_]+)\s+(\d+\.\d+|\d+)((?:\s+\w+)+)'
     m = re.match(reg, line)
@@ -63,7 +64,7 @@ def provision_game(line):
     # For example:
     # version:1.0
     # name:2048
-    # users:drew ben lou hunter
+    # users:drew ben lou hunter #TODO: What happens if a user installs it later?
     f_out.write(bytes("version:%s\n" % (version), "utf-8"))
     f_out.write(bytes("name:%s\n" % (name), "utf-8"))
     f_out.write(bytes("users:%s\n" % (" ".join(users)), "utf-8"))
@@ -97,7 +98,7 @@ def main():
     try:
         f_factory_secrets = open(args.factory_secrets, "r")
     except Exception as e:
-        print("Couldn't open file %s" % (args.factory_secrets))
+        print("Couldn't open file %s: %s" % (args.factory_secrets), (e))
         exit(2)
 
     # Open the games file
@@ -105,7 +106,7 @@ def main():
         f_games = open(args.games, "r")
     except Exception as e:
         print("Couldn't open file %s" % (args.games))
-        f_factory_secrets.close()
+        f_factory_secrets.close() # Doesn't close otherwise?
         exit(2)
 
     subprocess.check_call("mkdir -p %s" % (gen_path), shell=True)
