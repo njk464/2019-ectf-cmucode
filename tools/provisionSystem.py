@@ -5,6 +5,8 @@ import subprocess
 import re
 import argparse
 
+from Crypto.PublicKey import RSA
+
 # Path to the mesh_users header file
 mesh_users_fn = os.environ["ECTF_UBOOT"] + "/include/mesh_users.h"
 # Path to the default_games header file
@@ -15,12 +17,14 @@ gen_path = "files/generated"
 system_image_fn = "SystemImage.bif"
 # File name for the factory secrets
 factory_secrets_fn = "FactorySecrets.txt"
+# Path to secrets header file
+secret_header_fn = os.environ["ECTF_UBOOT"] + "/include/secret.h"
 
 
 def validate_users(lines):
     """Validate that the users data is formatted properly and return a list
     of tuples of users and pins.
-
+    TODO: Check this regular expression
     lines: list of strings from a users.txt file with newlines removed
     """
     # Regular expression to ensure that there is a username and an 8 digit pin
@@ -153,12 +157,16 @@ MITRE_Entertainment_System: {{
     """.format(path=os.environ["ECTF_PETALINUX"]))
 
 
-def write_factory_secrets(f):
+def write_factory_secrets(f, h):
     """Write any factory secrets. The reference implementation has none
-
+    TODO: Evaluate the size of the keys
     f: open file to write the factory secrets to
     """
-    None
+    key = RSA.generate(4096)
+    f.write(key.exportKey())
+    h.write(key.publicKey.exportKey())
+
+    
 
 
 def main():
@@ -209,6 +217,12 @@ def main():
         print("Unable to open %s: %s" % (factory_secrets_fn, e,))
         exit(2)
 
+    try:
+        f_secret_header = open(secret_header_fn, "w+")
+    except Exception as e:
+        print("Unable to open secret header file: %s" % (e,))
+        exit(2)
+
     # Read in all of the user information into a list and strip newlines
     lines = [line.rstrip('\n') for line in f_mesh_users_in]
 
@@ -230,7 +244,7 @@ def main():
     write_mesh_default_h(args.DEFAULT_FILE, default_games_hpath)
     print("Generated default_games.h file")
 
-    # build MES.bin
+    # build MES.bin # Doesn't actually create the file? Makes that in package
     build_images()
 
     # write system image bif
@@ -239,9 +253,11 @@ def main():
     print("Generated SystemImage file: %s" % (os.path.join(gen_path, system_image_fn)))
 
     # write factory secrets
-    write_factory_secrets(f_factory_secrets)
+    write_factory_secrets(f_factory_secrets, f_secret_header)
     f_factory_secrets.close()
-    print("Generated FactorySecrets file: %s" % (os.path.join(gen_path, factory_secrets_fn)))
+    f_secret_header.close()
+    print("Generated FactorySecrets file: %s\nGenerated SecretHeader file: %s" % (os.path.join(gen_path, factory_secrets_fn), f_secret_header))
+
 
     exit(0)
 
