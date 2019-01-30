@@ -202,7 +202,7 @@
 #
 # mtd-utils 
 #
-CONFIG_mtd-utils=y
+# CONFIG_mtd-utils=y
 # CONFIG_mtd-utils-ubifs is not set
 # CONFIG_mtd-utils-dev is not set
 # CONFIG_mtd-utils-jffs2 is not set
@@ -276,14 +276,14 @@ CONFIG_mtd-utils=y
 #
 # bash 
 #
-# CONFIG_bash is not set
+CONFIG_bash=y
 # CONFIG_bash-dev is not set
 # CONFIG_bash-dbg is not set
 
 #
 # sysvinit 
 #
-# CONFIG_sysvinit is not set
+CONFIG_sysvinit=y
 # CONFIG_sysvinit-pidof is not set
 # CONFIG_sysvinit-dbg is not set
 # CONFIG_sysvinit-dev is not set
@@ -405,7 +405,7 @@ CONFIG_mtd-utils=y
 #
 # canutils 
 #
-CONFIG_canutils=y
+# CONFIG_canutils is not set
 # CONFIG_canutils-dbg is not set
 # CONFIG_canutils-dev is not set
 
@@ -473,7 +473,7 @@ CONFIG_canutils=y
 # CONFIG_openssh-ssh is not set
 # CONFIG_openssh-dev is not set
 # CONFIG_openssh-sftp is not set
-CONFIG_openssh-sftp-server=y
+# CONFIG_openssh-sftp-server is not set
 # CONFIG_openssh-scp is not set
 
 #
@@ -2649,7 +2649,7 @@ CONFIG_packagegroup-core-boot=y
 #
 # packagegroup-core-buildessential 
 #
-CONFIG_packagegroup-core-buildessential=y
+# CONFIG_packagegroup-core-buildessential=y
 # CONFIG_packagegroup-core-buildessential-dev is not set
 # CONFIG_packagegroup-core-buildessential-dbg is not set
 
@@ -2663,7 +2663,7 @@ CONFIG_packagegroup-core-buildessential=y
 #
 # packagegroup-core-ssh-dropbear 
 #
-CONFIG_packagegroup-core-ssh-dropbear=y
+# CONFIG_packagegroup-core-ssh-dropbear=y
 # CONFIG_packagegroup-core-ssh-dropbear-dbg is not set
 # CONFIG_packagegroup-core-ssh-dropbear-dev is not set
 
@@ -3291,7 +3291,7 @@ CONFIG_packagegroup-core-ssh-dropbear=y
 #
 # tcf-agent 
 #
-CONFIG_tcf-agent=y
+# CONFIG_tcf-agent=y
 # CONFIG_tcf-agent-dbg is not set
 # CONFIG_tcf-agent-dev is not set
 
@@ -3658,7 +3658,7 @@ CONFIG_tcf-agent=y
 #
 # bridge-utils 
 #
-CONFIG_bridge-utils=y
+# CONFIG_bridge-utils=y
 # CONFIG_bridge-utils-dbg is not set
 # CONFIG_bridge-utils-dev is not set
 
@@ -4122,7 +4122,7 @@ CONFIG_bridge-utils=y
 #
 # apps 
 #
-CONFIG_mesh-game-loader=y
+# CONFIG_mesh-game-loader is not set
 # CONFIG_peekpoke is not set
 CONFIG_uioctl=y
 
@@ -4133,4 +4133,4 @@ CONFIG_uioctl=y
 #
 # PetaLinux RootFS Settings
 #
-CONFIG_ROOTFS_ROOT_PASSWD="root"
+CONFIG_ROOTFS_ROOT_PASSWD="eCTF-cmu-temporary-root-passwd"
