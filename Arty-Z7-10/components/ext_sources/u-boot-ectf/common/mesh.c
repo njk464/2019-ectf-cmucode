@@ -1350,7 +1350,7 @@ int mesh_login(User *user) {
     char *tmp_name, *tmp_pin;
     int retval;
 
-    memset(user->name, 0, MAX_STR_LEN);
+    memset(user->name, 0, MAX_USERNAME_LENGTH);
 
     do {
         tmp_name = mesh_input("Enter your username: ");
@@ -1360,14 +1360,14 @@ int mesh_login(User *user) {
         tmp_pin = mesh_input("Enter your PIN: ");
     } while (!strlen(tmp_pin));
 
-    strncpy(tmp_user.name, tmp_name, MAX_STR_LEN);
-    strncpy(tmp_user.pin, tmp_pin, MAX_STR_LEN);
+    strncpy(tmp_user.name, tmp_name, MAX_USERNAME_LENGTH);
+    strncpy(tmp_user.pin, tmp_pin, MAX_PIN_LENGTH);
 
     /* if valid user, copy into user */
     retval = mesh_validate_user(&tmp_user);
     if (!retval) {
-        strncpy(user->name, tmp_user.name, MAX_STR_LEN);
-        strncpy(user->pin, tmp_user.pin, MAX_STR_LEN);
+        strncpy(user->name, tmp_user.name, MAX_USERNAME_LENGTH);
+        strncpy(user->pin, tmp_user.pin, MAX_PIN_LENGTH);
     } else {
         printf("Login failed. Please try again\n");
     }
