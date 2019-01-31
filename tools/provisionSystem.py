@@ -5,7 +5,10 @@ import subprocess
 import re
 import argparse
 
-from Crypto.PublicKey import RSA
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+
 
 # Path to the mesh_users header file
 mesh_users_fn = os.environ["ECTF_UBOOT"] + "/include/mesh_users.h"
@@ -162,9 +165,31 @@ def write_factory_secrets(f, h):
     TODO: Evaluate the size of the keys
     f: open file to write the factory secrets to
     """
-    key = RSA.generate(4096)
-    f.write(key.exportKey())
-    h.write(key.publicKey.exportKey())
+    # key = RSA.generate(4096)
+    # f.write(key.exportKey())
+    # h.write(key.publicKey.exportKey())
+    private_key = rsa.generate_private_key(
+        public_exponent=65537, 
+        key_size=2048, 
+        backend=default_backend()
+        )
+    pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM, 
+        format=serialization.PrivateFormat.PKCS8, 
+        encryption_algorithm=serialization.NoEncryption()
+        )
+    
+    f.write(pem.decode('utf-8'))
+    public_key = private_key.public_key()
+    pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM, 
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    h.write(pem.decode('utf-8'))
+
+
+
+    
 
     
 
