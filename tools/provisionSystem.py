@@ -4,6 +4,7 @@ import os
 import subprocess
 import re
 import argparse
+import base64
 
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
@@ -214,23 +215,16 @@ def write_factory_secrets(f, h):
 #ifndef __SECRET_H__
 #define __SECRET_H__
 
-static char* encrypt_priv_key = " """
-    s += encrypt_key_priv.decode('utf-8')
-    s +=""";
-static char* sign_public_key = " """
-    s += sign_key_pub.decode('utf-8')
-    s += """
+static char* encrypt_priv_key = \""""
+    s += base64.b64encode(encrypt_key_priv.decode('utf-8'))
+    s +="""\";
+static char* sign_public_key = \""""
+    s += base64.b64encode(sign_key_pub.decode('utf-8'))
+    s += """\" ;
 
 #endif /* __SECRET_H__ */
 """
     h.write(s)
-
-
-
-    
-
-    
-
 
 def main():
     # Argument parsing
