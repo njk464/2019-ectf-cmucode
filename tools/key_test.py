@@ -3,10 +3,17 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 
+f = open("myfile", "rb")
+
 
 with open("private.pem", "rb") as private_key_file:
+    string = private_key_file.read()
+    result = string.split("*****\n")
+    # print(result[0])
+    # print("Next:")
+    # print(result[1])
     private_key = serialization.load_pem_private_key(
-        private_key_file.read(),
+        result[0],
         password = None,
         backend=default_backend()
     )
@@ -20,11 +27,17 @@ with open("private.pem", "rb") as private_key_file:
         hashes.SHA256()
     )
     print(signature)
-    message=b"A nessage I want to sign"
+    # message=b"A message I want to sign"
 
-with open("public.pem", "rb") as public_key_file:
+    # string = private_key_file.read()
+    # result = string.split("*****\n")
+    # print(result[0])
+    # print("Next:")
+    # print(result[1])
+
+# with open("public.pem", "rb") as public_key_file:
     public_key = serialization.load_pem_public_key(
-        public_key_file.read(),
+        result[1],
         backend=default_backend()
     )
     public_key.verify(

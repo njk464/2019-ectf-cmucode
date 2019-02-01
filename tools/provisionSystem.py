@@ -168,24 +168,62 @@ def write_factory_secrets(f, h):
     # key = RSA.generate(4096)
     # f.write(key.exportKey())
     # h.write(key.publicKey.exportKey())
-    private_key = rsa.generate_private_key(
+    encrypt_key = rsa.generate_private_key(
         public_exponent=65537, 
         key_size=2048, 
         backend=default_backend()
         )
-    pem = private_key.private_bytes(
+    encrypt_key_priv = encrypt_key.private_bytes(
         encoding=serialization.Encoding.PEM, 
         format=serialization.PrivateFormat.PKCS8, 
         encryption_algorithm=serialization.NoEncryption()
         )
-    
-    f.write(pem.decode('utf-8'))
-    public_key = private_key.public_key()
-    pem = public_key.public_bytes(
+
+    public_key = encrypt_key.public_key()
+    encrypt_key_pub = public_key.public_bytes(
         encoding=serialization.Encoding.PEM, 
         format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
-    h.write(pem.decode('utf-8'))
+    f.write(encrypt_key_pub.decode('utf-8'))
+    f.write("*****\n")
+
+    sign_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+        backend=default_backend()
+        )
+    sign_key_priv = sign_key.private_bytes(
+        encoding=serialization.Encoding.PEM, 
+        format=serialization.PrivateFormat.PKCS8, 
+        encryption_algorithm=serialization.NoEncryption()
+        )
+    public_key = encrypt_key.public_key()
+    sign_key_pub = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM, 
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    f.write(sign_key_priv.decode('utf-8'))
+
+    s = """
+/*
+* This is an automatically generated file by provisionSystem.py
+*
+*
+*/
+
+#ifndef __SECRET_H__
+#define __SECRET_H__
+
+static char* encrypt_priv_key = " """
+    s += encrypt_key_priv.decode('utf-8')
+    s +=""";
+static char* sign_public_key = " """
+    s += sign_key_pub.decode('utf-8')
+    s += """
+
+#endif /* __SECRET_H__ */
+"""
+    h.write(s)
 
 
 
