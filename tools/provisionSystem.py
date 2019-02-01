@@ -219,7 +219,7 @@ static char* encrypt_priv_key = \""""
     s += base64.b64encode(encrypt_key_priv).decode('utf-8')
     s +="""\";
 static char* sign_public_key = \""""
-    s += base64.b64encode(sign_key_priv).decode('utf-8')
+    s += base64.b64encode(sign_key_pub).decode('utf-8')
     s += """\" ;
 
 #endif /* __SECRET_H__ */
