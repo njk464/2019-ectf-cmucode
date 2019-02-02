@@ -10,8 +10,10 @@ def main():
 
 
     with open("private.pem", "rb") as private_key_file:
-        string = private_key_file.read()
+        string = private_key_file.read().decode('utf-8')
         result = string.split("*****\n")
+        result[0] = result[0].encode()
+        result[1] = result[1].encode()
         # print(result[0])
         # print("Next:")
         # print(result[1])
@@ -20,7 +22,10 @@ def main():
             password = None,
             backend=default_backend()
         )
-        message = b"A message I want to sign"
+        # message = b"A message I want to sign"
+        f = open("demo_files/2048", 'rb')
+        message = f.read()
+        print(len(message))
         signature = private_key.sign(
             message,
             padding.PSS(
@@ -30,13 +35,8 @@ def main():
             hashes.SHA256()
         )
         print(signature)
-        # message=b"A message I want to sign"
-
-        # string = private_key_file.read()
-        # result = string.split("*****\n")
-        # print(result[0])
-        # print("Next:")
-        # print(result[1])
+        message = bytearray(message)
+        # message[1] = 0x0
 
     # with open("public.pem", "rb") as public_key_file:
         public_key = serialization.load_pem_public_key(
@@ -119,6 +119,7 @@ static char* sign_public_key = \""""
     h.write(s)
 
 if __name__ == "__main__":
-    f = open("factorySecrets.txt", "w")
-    h = open("secret.h", "w")
-    write_factory_secrets(f, h)
+    # f = open("factorySecrets.txt", "w")
+    # h = open("secret.h", "w")
+    # write_factory_secrets(f, h)
+    main()
