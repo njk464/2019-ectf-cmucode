@@ -64,6 +64,7 @@ char* mesh_input(char* prompt);
 int mesh_valid_install(char *game_name);
 void ptr_to_string(void* ptr, char* buf);
 void full_name_from_short_name(char* full_name, struct games_tbl_row* row);
+void *safe_malloc(size_t size);
 
 /*
     Ext 4 functions
