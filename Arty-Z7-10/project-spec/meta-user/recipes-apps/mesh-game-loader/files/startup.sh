@@ -10,7 +10,7 @@ start ()
 
     # create game file and set permissions
     touch /usr/bin/game
-    adduser ectf --shell /usr/bin/game --disabled-password --gecos ""
+    adduser ectf --shell /bin/sh --disabled-password --gecos ""
     chown ectf:ectf /usr/bin/game
     chmod o+x /usr/bin/game
 
