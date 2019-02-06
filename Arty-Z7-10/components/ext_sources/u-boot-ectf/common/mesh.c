@@ -29,9 +29,15 @@
 // declare user global
 User user;
 
+// Security TODO: 
+// Switch int to unsigned ints. 
+// Switch strcmp to strncmp
+// findcmd and cmd
+
 /*
     List of builtin commands, followed by their corresponding functions.
  */
+// TODO: remove resetflash and dump
 char *builtin_str[] = {
     "help",
     "shutdown",
@@ -72,6 +78,7 @@ int mesh_init_table(void)
 {
     /* Initialize the table where games will be installed */
     char* sentinel = (char*) malloc(sizeof(char) * MESH_SENTINEL_LENGTH);
+    //TODO: Error checking for malloc.
     int ret = 1;
 
     mesh_flash_read(sentinel, MESH_SENTINEL_LOCATION, MESH_SENTINEL_LENGTH);
@@ -139,6 +146,7 @@ int mesh_flash_write(void* data, unsigned int flash_location, unsigned int flash
     unsigned int ending_page = (flash_location + flash_length) / FLASH_PAGE_SIZE;
 
     // malloc space to hold an entire page
+    // TODO: check error on malloc
     char* flash_data = malloc(sizeof(char) * FLASH_PAGE_SIZE);
 
     // Find the sf sub command, defined by u-boot
@@ -189,6 +197,7 @@ int mesh_flash_write(void* data, unsigned int flash_location, unsigned int flash
         }
 
         // We need to convert things to strings since this mimics the command prompt
+        // TODO: #define these magic numbers?
         char data_ptr_str[11] = "";
         char offset_str[11] = "";
         char length_str[11] = "";
@@ -221,6 +230,7 @@ int mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_
 
     // We need to convert things to strings since this mimics the command prompt,
     // so get us space for strings
+    // TODO: #define these magic numbers?
     char str_ptr[11] = "";
     char offset_ptr[11] = "";
     char length_ptr[11] = "";
@@ -268,7 +278,9 @@ int mesh_help(char **args)
 int mesh_shutdown(char **args)
 {
     /* Exit the shell completely */
+    // TODO: Change to MAX_USERNAME_LENGTH + 1
     memset(user.name, 0, MAX_STR_LEN);
+    // TODO: memset pin also
     return MESH_SHUTDOWN;
 }
 
@@ -280,7 +292,9 @@ int mesh_shutdown(char **args)
 int mesh_logout(char **args)
 {
     /* Exit the shell, allow other user to login */
+    // TODO: Change to MAX_USERNAME_LENGTH + 1
     memset(user.name, 0, MAX_STR_LEN);
+    // TODO: memset pin also
     return 0;
 }
 
@@ -335,6 +349,7 @@ int mesh_play(char **args)
     size = mesh_size_ext4(args[1]);
 
     // write game size to memory
+    // TODO: malloc check
     char *size_str = (char *)malloc(sizeof(int));
     sprintf(size_str, "0x%x", (int) size);
     char * const mw_argv[3] = { "mw.l", "0x1fc00000", size_str };
@@ -475,6 +490,7 @@ int mesh_uninstall(char **args)
         mesh_flash_read(&row, offset, sizeof(struct games_tbl_row)))
     {
         // the most space that we could need to store the full game name
+        // TODO: malloc check
         char* full_name = (char*) malloc(snprintf(NULL, 0, "%s-v%d.%d", row.game_name, row.major_version, row.minor_version) + 1);
         full_name_from_short_name(full_name, &row);
 
@@ -510,6 +526,7 @@ int mesh_dump_flash(char **args)
     unsigned int size = simple_strtoul(args[2], NULL, 16);
     unsigned int offset = simple_strtoul(args[1], NULL, 16);
     printf("Dumping %u bytes of flash\n", size);
+    // TODO: malloc check
     char* flash = (char*) malloc(sizeof(char) * size);
     mesh_flash_read(flash, offset, size);
 
@@ -533,6 +550,8 @@ int mesh_dump_flash(char **args)
     return 0;
 }
 
+
+// TODO: remove, or at least remove args
 int mesh_reset_flash(char **args)
 {
     // 0x1000000 is all 16 MB of flash
@@ -561,6 +580,7 @@ void mesh_loop(void) {
     char **args;
     int status = 1;
 
+    // TODO: change to user and pin size??
     memset(user.name, 0, MAX_STR_LEN);
     memset(user.pin, 0, MAX_STR_LEN);
 
@@ -576,6 +596,7 @@ void mesh_loop(void) {
 
     // Perform first time initialization to ensure that the default
     // games are present
+    // TODO: Change all of these magic numbers
     strncpy(user.name, "demo", 5);
     strncpy(user.pin, "00000000", 9);
 
@@ -590,6 +611,7 @@ void mesh_loop(void) {
         }
     }
 
+    // hange tro pin and suername size other overflow.
     memset(user.name, 0, MAX_STR_LEN);
     memset(user.pin, 0, MAX_STR_LEN);
 
@@ -789,7 +811,7 @@ int mesh_ls_ext4(const char *dirname, char *filename)
 
     ret = mesh_ls_iterate_dir(dirnode, filename);
 
-    return ret ;
+    return ret;
 }
 
 int mesh_query_ext4(const char *dirname, char *filename){
@@ -869,6 +891,7 @@ int mesh_game_installed(char *game_name){
         mesh_flash_read(&row, offset, sizeof(struct games_tbl_row)))
     {
         // the most space that we could need to store the full game name
+        // TODO: check malloc
         char* full_name = (char*) malloc(snprintf(NULL, 0, "%s-v%d.%d", row.game_name, row.major_version, row.minor_version) + 1);
         full_name_from_short_name(full_name, &row);
         // check if game is installed and if it is for the specified user.
@@ -1007,6 +1030,7 @@ void mesh_get_game_header(Game *game, char *game_name){
     game_size = mesh_size_ext4(game_name);
 
     // read the game into a buffer
+    // TODO: malloc check
     char* game_buffer = (char*) malloc(game_size + 1);
     mesh_read_ext4(game_name, game_buffer, game_size);
 
@@ -1057,6 +1081,7 @@ void mesh_get_game_header(Game *game, char *game_name){
     free(game_buffer);
 }
 /*
+ *  TODO: Change to magic values.
     This function reads in the specified game and ensures that the user is
     in the allowed users section of the game and that you are not downgrading
     a game.
@@ -1182,6 +1207,7 @@ void ptr_to_string(void* ptr, char* buf)
 {
     /* Given a pointer and a buffer of length 11, returns a string of the poitner */
     sprintf(buf, "0x%x", (unsigned int) ptr);
+    // TODO: Change magic number
     buf[10] = 0;
 }
 
@@ -1193,6 +1219,7 @@ void ptr_to_string(void* ptr, char* buf)
 int mesh_is_first_table_write(void)
 {
     /* Initialize the table where games will be installed */
+    // TODO malloc check
     char* sentinel = (char*) malloc(sizeof(char) * MESH_SENTINEL_LENGTH);
     int ret = 0;
 
@@ -1247,6 +1274,7 @@ char* mesh_read_line(int bufsize)
 {
     int position = 0;
     char *buffer = (char*) malloc(sizeof(char) * bufsize);
+    //TODO: malloc check
     int c;
 
     while (1) {
@@ -1305,6 +1333,7 @@ int mesh_get_argv(char **args){
 */
 char **mesh_split_line(char *line) {
     int bufsize = MESH_TOK_BUFSIZE, position = 0;
+    // TODO check malloc.
     char **tokens = (char**) malloc(bufsize * sizeof(char*));
     char *token, **tokens_backup;
 
@@ -1335,6 +1364,7 @@ char **mesh_split_line(char *line) {
 */
 char* mesh_input(char* prompt)
 {
+    //TODO: Format string vuln
     printf(prompt);
     return mesh_read_line(MAX_STR_LEN);
 }
