@@ -27,5 +27,6 @@ do_install() {
 	     install -m 0555 mesh-game-loader ${D}/bin/
          install -d ${D}/etc/
          install -d ${D}${sysconfdir}/init.d/
-         install -m 0550 startup.sh ${D}${sysconfdir}/init.d/startup
+#        install -m 0550 startup.sh ${D}${sysconfdir}/init.d/startup
+         install -m 0550 startup.sh ${D}/bin/startup
 }

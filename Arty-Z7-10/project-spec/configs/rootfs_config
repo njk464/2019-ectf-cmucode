@@ -4122,7 +4122,7 @@ CONFIG_packagegroup-core-boot=y
 #
 # apps 
 #
-# CONFIG_mesh-game-loader is not set
+CONFIG_mesh-game-loader=y
 # CONFIG_peekpoke is not set
 CONFIG_uioctl=y
 
