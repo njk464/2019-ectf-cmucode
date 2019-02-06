@@ -4,6 +4,7 @@ import os
 import subprocess
 import re
 import argparse
+import bcrypt
 
 # Path to the mesh_users header file
 mesh_users_fn = os.environ["ECTF_UBOOT"] + "/include/mesh_users.h"
@@ -25,11 +26,15 @@ def validate_users(lines):
     """
     # Regular expression to ensure that there is a username and an 8 digit pin
     reg = r'^\s*(\w+)\s+(\d{8})\s*$'
-    lines = [(m.group(1), m.group(2)) for line in lines
-             for m in [re.match(reg, line)] if m]
+    users = []
+    for line in lines:
+        for m in [re.match(reg, line)]:
+            if m:
+                hashed_pass = bcrypt.hashpw(m.group(2).encode('utf-8'), bcrypt.gensalt(14)).decode("utf-8")
+                users.append((m.group(1), hashed_pass))
 
-    # return a list of tuples of (username, pin)
-    return lines
+    # return a list of tuples of (username, hashed_pin)
+    return users
 
 
 def write_mesh_users_h(users, f):
@@ -54,13 +59,14 @@ def write_mesh_users_h(users, f):
 struct MeshUser {{
     char username[16];
     char pin[9];
+    char hash[61];
 }};
 
 static struct MeshUser mesh_users[] = {{
 """.format(num_users=len(users)))
 
-    for (user, pin) in users:
-        data = '    {.username="%s", .pin="%s"},\n' % (user, pin)
+    for (user, hashpw) in users:
+        data = '    {.username="%s", .hash="%s"},\n' % (user, hashpw)
         f.write(data)
 
     f.write("""
@@ -212,6 +218,7 @@ def main():
     # Read in all of the user information into a list and strip newlines
     lines = [line.rstrip('\n') for line in f_mesh_users_in]
 
+    users = validate_users(lines)
     # parse user strings
     try:
         users = validate_users(lines)
@@ -220,7 +227,8 @@ def main():
             exit(2)
 
     # Add the demo user, which must always exist, per the rules
-    users.append(("demo", "00000000"))
+    demo_hash = bcrypt.hashpw("00000000".encode('utf-8'), bcrypt.gensalt(14)).decode("utf-8")
+    users.append(("demo", demo_hash))
     # write mesh users to uboot header
     write_mesh_users_h(users, f_mesh_users_out)
     f_mesh_users_out.close()

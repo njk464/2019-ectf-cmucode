@@ -13,6 +13,7 @@
 #include <mesh.h>
 #include <mesh_users.h>
 #include <default_games.h>
+#include <bcrypt.h>
 
 #define MESH_TOK_BUFSIZE 64
 #define MESH_TOK_DELIM " \t\r\n\a"
@@ -1220,7 +1221,7 @@ int mesh_validate_user(User *user)
     for (int i = 0; i < NUM_MESH_USERS; ++i)
     {
         if (strcmp(mesh_users[i].username, user->name) == 0 &&
-            strcmp(mesh_users[i].pin, user->pin) == 0)
+            bcrypt_checkpass(user->pin, mesh_users[i].hash) == 0)
         {
             return 0;
         }
