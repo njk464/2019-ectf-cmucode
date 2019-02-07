@@ -1350,7 +1350,8 @@ int mesh_login(User *user) {
     char *tmp_name, *tmp_pin;
     int retval;
 
-    memset(user->name, 0, MAX_USERNAME_LENGTH);
+    memset(user->name, 0, MAX_USERNAME_LENGTH + 1);
+    memset(user->pin, 0, MAX_PIN_LENGTH + 1);
 
     do {
         tmp_name = mesh_input("Enter your username: ");
