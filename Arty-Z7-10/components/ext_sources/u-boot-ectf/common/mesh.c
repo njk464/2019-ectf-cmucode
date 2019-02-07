@@ -1361,8 +1361,8 @@ int mesh_login(User *user) {
         tmp_pin = mesh_input("Enter your PIN: ");
     } while (!strlen(tmp_pin));
 
-    strncpy(tmp_user.name, tmp_name, MAX_USERNAME_LENGTH);
-    strncpy(tmp_user.pin, tmp_pin, MAX_PIN_LENGTH);
+    strncpy(tmp_user.name, tmp_name, MAX_USERNAME_LENGTH + 1);
+    strncpy(tmp_user.pin, tmp_pin, MAX_PIN_LENGTH + 1);
 
     /* if valid user, copy into user */
     retval = mesh_validate_user(&tmp_user);
