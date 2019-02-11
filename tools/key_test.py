@@ -76,6 +76,7 @@ def create_games(f):
             label=None
         )
     )
+    g.write(ciphertext)
 
 
 def write_factory_secrets(f, h):

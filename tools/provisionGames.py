@@ -82,6 +82,16 @@ def provision_game(line):
 
     print("    %s -> %s" % (g_path, os.path.join(gen_path, f_out_name)))
 
+def load_factory_secrets(f):
+    lines = [line.rstrip('\n') for line in f]
+    key = lines[-1:]
+    print(key)
+    print(lines[:-1])
+    array = []
+    for user in lines:
+        array.append(user.split(' '))
+    print(array)
+    return array, key
 
 def main():
     # argument parsing
@@ -108,6 +118,8 @@ def main():
         print("Couldn't open file %s" % (args.games))
         f_factory_secrets.close() # Doesn't close otherwise?
         exit(2)
+    
+    user_array, key = load_factory_secrets(f_factory_secrets)
 
     subprocess.check_call("mkdir -p %s" % (gen_path), shell=True)
 
