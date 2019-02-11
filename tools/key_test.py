@@ -187,11 +187,48 @@ def validate_users(lines):
     return lines
 
 def create_factory_secrets(users, f, h):
-    # pickle.dump(users, f, pickle.HIGHEST_PROTOCOL)
-    # pickle.dump("Key", f, pickle.HIGHEST_PROTOCOL)
+    """Write any factory secrets. The reference implementation has none
+    f: open file to write the factory secrets to
+    h: open file to write data to pass along to shell
+    """
     for user in users:
-        f.write(user[0] + ' ' + user[1] + ' djfkalhjkfdsla\n')
-    f.write("This is totes a key again")
+        f.write(user[0] + ' ' + user[1] + ' salt\n')
+    # f.write("This is totes a key again\n")
+
+    sign_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+        backend=default_backend()
+        )
+    sign_key_priv = sign_key.private_bytes(
+        encoding=serialization.Encoding.PEM, 
+        format=serialization.PrivateFormat.PKCS8, 
+        encryption_algorithm=serialization.NoEncryption()
+        )
+    public_key = sign_key.public_key()
+    sign_key_pub = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM, 
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    f.write(base64.b64encode(sign_key_priv).decode('utf-8'))
+
+    s = """
+/*
+* This is an automatically generated file by provisionSystem.py
+*
+*
+*/
+
+#ifndef __SECRET_H__
+#define __SECRET_H__
+
+static char* sign_public_key = \""""
+    s += base64.b64encode(sign_key_pub).decode('utf-8')
+    s += """\" ;
+
+#endif /* __SECRET_H__ */
+"""
+    h.write(s)
 
 def read_factory_secrets(f):
     lines = [line.rstrip('\n') for line in f]
@@ -203,6 +240,7 @@ def read_factory_secrets(f):
     for user in lines:
         array.append(user.split(' '))
     # print(array)
+    return array, key
 
 if __name__ == "__main__":
     f = open("factorySecrets.txt", "w")
@@ -212,7 +250,7 @@ if __name__ == "__main__":
     create_factory_secrets(users, f, h)
     f.close()
     f = open("factorySecrets.txt", "r")
-    read_factory_secrets(f)
+    array, key = read_factory_secrets(f)
     # create_games(f)
     f.close()
     # new_plan("alex", "12345678")

@@ -161,32 +161,15 @@ MITRE_Entertainment_System: {{
     """.format(path=os.environ["ECTF_PETALINUX"]))
 
 
-def write_factory_secrets(f, h):
+def write_factory_secrets(users, f, h):
     """Write any factory secrets. The reference implementation has none
-    TODO: Evaluate the size of the keys
+    users: tuples of the users 
     f: open file to write the factory secrets to
+    h: open file to write data to pass along to shell
     """
-    # key = RSA.generate(4096)
-    # f.write(key.exportKey())
-    # h.write(key.publicKey.exportKey())
-    encrypt_key = rsa.generate_private_key(
-        public_exponent=65537, 
-        key_size=2048, 
-        backend=default_backend()
-        )
-    encrypt_key_priv = encrypt_key.private_bytes(
-        encoding=serialization.Encoding.PEM, 
-        format=serialization.PrivateFormat.PKCS8, 
-        encryption_algorithm=serialization.NoEncryption()
-        )
-
-    public_key = encrypt_key.public_key()
-    encrypt_key_pub = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM, 
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-    f.write(encrypt_key_pub.decode('utf-8'))
-    f.write("*****\n")
+    for user in users:
+        f.write(user[0] + ' ' + user[1] + ' salt\n')
+    # f.write("This is totes a key again\n")
 
     sign_key = rsa.generate_private_key(
         public_exponent=65537,
@@ -198,12 +181,12 @@ def write_factory_secrets(f, h):
         format=serialization.PrivateFormat.PKCS8, 
         encryption_algorithm=serialization.NoEncryption()
         )
-    public_key = encrypt_key.public_key()
+    public_key = sign_key.public_key()
     sign_key_pub = public_key.public_bytes(
         encoding=serialization.Encoding.PEM, 
         format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
-    f.write(sign_key_priv.decode('utf-8'))
+    f.write(base64.b64encode(sign_key_priv).decode('utf-8'))
 
     s = """
 /*
@@ -215,9 +198,6 @@ def write_factory_secrets(f, h):
 #ifndef __SECRET_H__
 #define __SECRET_H__
 
-static char* encrypt_priv_key = \""""
-    s += base64.b64encode(encrypt_key_priv).decode('utf-8')
-    s +="""\";
 static char* sign_public_key = \""""
     s += base64.b64encode(sign_key_pub).decode('utf-8')
     s += """\" ;
@@ -310,7 +290,7 @@ def main():
     print("Generated SystemImage file: %s" % (os.path.join(gen_path, system_image_fn)))
 
     # write factory secrets
-    write_factory_secrets(f_factory_secrets, f_secret_header)
+    write_factory_secrets(users, f_factory_secrets, f_secret_header)
     f_factory_secrets.close()
     f_secret_header.close()
     print("Generated FactorySecrets file: %s\nGenerated SecretHeader file: %s" % (os.path.join(gen_path, factory_secrets_fn), f_secret_header))
