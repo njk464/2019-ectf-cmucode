@@ -3,11 +3,13 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 import base64
-import binascii
+import os
+import re
+import pickle
 
 def main():
-
 
     with open("private.pem", "rb") as private_key_file:
         string = private_key_file.read().decode('utf-8')
@@ -53,6 +55,29 @@ def main():
             hashes.SHA256()
         )
 
+def create_games(f):
+    string = f.read()
+    result = string.split("*****\n")
+    result[0] = result[0].encode()
+    result[1] = result[1].encode()
+    print(result[0])
+    print(result[1])
+    public_key = serialization.load_pem_public_key(
+        result[0],
+        backend=default_backend()
+    )
+    g = open('demo_files/2048', 'rb')
+    data = g.read()
+    ciphertext = public_key.encrypt(
+        data,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+
+
 def write_factory_secrets(f, h):
     """Write any factory secrets. The reference implementation has none
     TODO: Evaluate the size of the keys
@@ -79,23 +104,8 @@ def write_factory_secrets(f, h):
         )
     f.write(encrypt_key_pub.decode('utf-8'))
     f.write("*****\n")
-
-    sign_key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-        backend=default_backend()
-        )
-    sign_key_priv = sign_key.private_bytes(
-        encoding=serialization.Encoding.PEM, 
-        format=serialization.PrivateFormat.PKCS8, 
-        encryption_algorithm=serialization.NoEncryption()
-        )
-    public_key = encrypt_key.public_key()
-    sign_key_pub = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM, 
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-    f.write(sign_key_priv.decode('utf-8'))
+    shared_key = os.urandom(64)
+    f.write(base64.b64encode(shared_key).decode('utf-8'))
 
     s = """
 /*
@@ -110,16 +120,102 @@ def write_factory_secrets(f, h):
 static char* encrypt_priv_key = \""""
     s += base64.b64encode(encrypt_key_priv).decode('utf-8')
     s +="""\";
-static char* sign_public_key = \""""
-    s += base64.b64encode(sign_key_pub).decode('utf-8')
+static char* shared_key = \""""
+    s += base64.b64encode(shared_key).decode('utf-8')
     s += """\" ;
 
 #endif /* __SECRET_H__ */
 """
     h.write(s)
 
+def new_plan(user, pin):
+    salt = os.urandom(256)
+    # print(salt)
+    digest = hashes.Hash(hashes.SHA512(), backend=default_backend())
+    digest.update(user.encode() + pin.encode() + salt)
+    output = digest.finalize()
+    print(len(output))
+    iv = output[:32]
+    key = output[32:]
+    print(len(iv))
+    print(len(key))
+    game_iv = os.urandom(256)
+    game_key = b'A'*32
+    data = game_key + game_iv
+    aesgcm = AESGCM(key)
+    ct = aesgcm.encrypt(iv, data, None)
+    print(ct)
+
+    pt = aesgcm.decrypt(iv, ct, None)
+    print(pt)
+
+    decrypted_game_key = pt[:32]
+    decrypted_game_iv = pt[32:]
+    print(decrypted_game_key)
+    print(decrypted_game_iv)
+
+    f = open('demo_files/2048', 'rb')
+    game_data = f.read()
+    header = b'THIS IS TOTES A HEADER'
+    data = header + game_data
+    aesgcm = AESGCM(decrypted_game_key)
+    game_ct = aesgcm.encrypt(decrypted_game_iv, data, None)
+
+    print(len(game_ct))
+
+    decrypted_game = aesgcm.decrypt(decrypted_game_iv, game_ct, None)
+    print(decrypted_game[:32])
+
+def open_users(path):
+    f_mesh_users_in = open(path, "r")
+    lines = [line.rstrip('\n') for line in f_mesh_users_in]
+    users = validate_users(lines)
+    return users
+
+def validate_users(lines):
+    """Validate that the users data is formatted properly and return a list
+    of tuples of users and pins.
+    TODO: Check this regular expression
+    lines: list of strings from a users.txt file with newlines removed
+    """
+    # Regular expression to ensure that there is a username and an 8 digit pin
+    reg = r'^\s*(\w+)\s+(\d{8})\s*$'
+    lines = [(m.group(1), m.group(2)) for line in lines
+             for m in [re.match(reg, line)] if m]
+
+    # return a list of tuples of (username, pin)
+    return lines
+
+def create_factory_secrets(users, f, h):
+    # pickle.dump(users, f, pickle.HIGHEST_PROTOCOL)
+    # pickle.dump("Key", f, pickle.HIGHEST_PROTOCOL)
+    for user in users:
+        f.write(user[0] + ' ' + user[1] + ' djfkalhjkfdsla\n')
+    f.write("This is totes a key again")
+
+def read_factory_secrets(f):
+    lines = [line.rstrip('\n') for line in f]
+    key = lines[-1:]
+    # print(key)
+    # print(lines[:-1])
+    # users = validate_users(lines[:-1])
+    array = []
+    for user in lines:
+        array.append(user.split(' '))
+    # print(array)
+
 if __name__ == "__main__":
-    # f = open("factorySecrets.txt", "w")
-    # h = open("secret.h", "w")
+    f = open("factorySecrets.txt", "w")
+    h = open("secret.h", "w")
     # write_factory_secrets(f, h)
-    main()
+    users = open_users('demo_files/demo_users.txt')
+    create_factory_secrets(users, f, h)
+    f.close()
+    f = open("factorySecrets.txt", "r")
+    read_factory_secrets(f)
+    # create_games(f)
+    f.close()
+    # new_plan("alex", "12345678")
+
+    
+    # main()
