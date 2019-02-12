@@ -9,6 +9,9 @@ import os
 import re
 import pickle
 
+import nacl.utils
+import nacl.secret
+
 def main():
 
     with open("private.pem", "rb") as private_key_file:
@@ -243,18 +246,58 @@ def read_factory_secrets(f):
     # print(array)
     return array, key
 
+def generate_keys(out_file):
+    # This must be kept secret, this is the combination to your safe
+    key = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
+
+    # This is your safe, you can use it to encrypt or decrypt messages
+    box = nacl.secret.SecretBox(key)
+
+    # This is our message to send, it must be a bytestring as SecretBox will
+    #   treat it as just a binary blob of data.
+    message = b"The president will be exiting through the lower levels"
+
+    # This is a nonce, it *MUST* only be used once, but it is not considered
+    #   secret and can be transmitted or stored alongside the ciphertext. A
+    #   good source of nonces are just sequences of 24 random bytes.
+    nonce = nacl.utils.random(nacl.secret.SecretBox.NONCE_SIZE)
+
+    encrypted = box.encrypt(message, nonce)
+    out_file.write(encrypted.ciphertext)
+
+    return key, nonce
+
+def use_key(key, nonce, file):
+
+    box = nacl.secret.SecretBox(key)
+    encrypted = file.read()
+    plaintext = box.decrypt(encrypted, nonce)
+    print(plaintext)
+
+
 if __name__ == "__main__":
-    f = open("factorySecrets.txt", "w")
-    h = open("secret.h", "w")
-    # write_factory_secrets(f, h)
-    users = open_users('demo_files/demo_users.txt')
-    create_factory_secrets(users, f, h)
-    f.close()
-    f = open("factorySecrets.txt", "r")
-    array, key = read_factory_secrets(f)
-    # create_games(f)
-    f.close()
-    # new_plan("alex", "12345678")
+    # f = open("factorySecrets.txt", "w")
+    # h = open("secret.h", "w")
+    # # write_factory_secrets(f, h)
+    # users = open_users('demo_files/demo_users.txt')
+    # create_factory_secrets(users, f, h)
+    # f.close()
+    # f = open("factorySecrets.txt", "r")
+    # array, key = read_factory_secrets(f)
+    # # create_games(f)
+    # f.close()
+    # # new_plan("alex", "12345678")
+    # main()
+    out_file = open('game.out', 'wb')
+    key_file = open('key.out', 'wb')
+    nonce_file = open('nonce.out', 'wb')
+    key, nonce = generate_keys(out_file)
+    key_file.write(key)
+    nonce_file.write(nonce)
+    out_file.close()
+    key_file.close()
+    nonce_file.close()
+    decrypt_file = open('game.out', 'rb')
+    use_key(key, nonce, decrypt_file)
 
     
-    # main()
