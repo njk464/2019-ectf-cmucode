@@ -9,7 +9,7 @@ import subprocess
 gen_path = "files/generated/games"
 
 
-def provision_game(line):
+def provision_game(line, user_array, key):
     """Given a line from games.txt, provision a game and write to the
     appropriate directory
 
@@ -64,10 +64,15 @@ def provision_game(line):
     # For example:
     # version:1.0
     # name:2048
-    # users:drew ben lou hunter #TODO: What happens if a user installs it later?
-    f_out.write(bytes("version:%s\n" % (version), "utf-8"))
-    f_out.write(bytes("name:%s\n" % (name), "utf-8"))
-    f_out.write(bytes("users:%s\n" % (" ".join(users)), "utf-8"))
+    # users:drew ben lou hunter 
+
+    header = bytes("version:%s\n" % (version), "utf-8")
+    header += bytes("name:%s\n" % (name), "utf-8")
+    for user in users:
+        header = bytes("users:%s\n" % (user), "utf-8")
+    # f_out.write(bytes("version:%s\n" % (version), "utf-8"))
+    # f_out.write(bytes("name:%s\n" % (name), "utf-8"))
+    # f_out.write(bytes("users:%s\n" % (" ".join(users)), "utf-8"))
 
     # Read in the binary source
     g_src = f.read()
@@ -127,7 +132,7 @@ def main():
 
     # Provision each line in the games file
     for line in f_games:
-        provision_game(line)
+        provision_game(line, user_array, key)
 
     print("Done Provision Games")
 
