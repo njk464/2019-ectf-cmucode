@@ -12,6 +12,8 @@ import pickle
 import nacl.utils
 import nacl.secret
 
+import pysodium
+
 def main():
 
     with open("private.pem", "rb") as private_key_file:
@@ -248,10 +250,11 @@ def read_factory_secrets(f):
 
 def generate_keys(out_file):
     # This must be kept secret, this is the combination to your safe
-    key = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
+    #key = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
+    key = pysodium.randombytes(pysodium.crypto_secretbox_KEYBYTES)
 
     # This is your safe, you can use it to encrypt or decrypt messages
-    box = nacl.secret.SecretBox(key)
+    #box = nacl.secret.SecretBox(key)
 
     # This is our message to send, it must be a bytestring as SecretBox will
     #   treat it as just a binary blob of data.
@@ -260,20 +263,22 @@ def generate_keys(out_file):
     # This is a nonce, it *MUST* only be used once, but it is not considered
     #   secret and can be transmitted or stored alongside the ciphertext. A
     #   good source of nonces are just sequences of 24 random bytes.
-    nonce = nacl.utils.random(nacl.secret.SecretBox.NONCE_SIZE)
+    #nonce = nacl.utils.random(nacl.secret.SecretBox.NONCE_SIZE)
+    nonce = nonce = pysodium.randombytes(pysodium.crypto_secretbox_NONCEBYTES)
 
-    encrypted = box.encrypt(message, nonce)
-    out_file.write(encrypted.ciphertext)
+    #encrypted = box.encrypt(message, nonce)
+    cipherText = pysodium.crypto_secretbox(message, nonce, key)
+    out_file.write(cipherText)
 
     return key, nonce
 
 def use_key(key, nonce, file):
 
-    box = nacl.secret.SecretBox(key)
-    encrypted = file.read()
-    plaintext = box.decrypt(encrypted, nonce)
+    #box = nacl.secret.SecretBox(key)
+    cipherText = file.read()
+    #plaintext = box.decrypt(encrypted, nonce)
+    plaintext = pysodium.crypto_secretbox_open(cipherText, nonce, key) 
     print(plaintext)
-
 
 if __name__ == "__main__":
     # f = open("factorySecrets.txt", "w")
@@ -299,5 +304,3 @@ if __name__ == "__main__":
     nonce_file.close()
     decrypt_file = open('game.out', 'rb')
     use_key(key, nonce, decrypt_file)
-
-    

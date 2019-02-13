@@ -89,13 +89,16 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
     } else {
         memset(key, 0, sizeof(key));
         memset(nonce, 0, sizeof(nonce));
-		get_ciphertext(ciphertext, len);
+		memset(ciphertext, 0, sizeof(ciphertext));
+        get_ciphertext(ciphertext, len);
         get_key(key);
         get_nonce(nonce);
         if(game_name != 0) {
-            if (crypto_secretbox_open_easy(plaintext, ciphertext, len, nonce, key) == -1){
+            if (crypto_secretbox_open(plaintext, ciphertext, len, nonce, key) == -1){
                 printf("integrity violation\n");
                 exit(255);
+            } else {
+                printf("Message is: %s\n", plaintext);
             }
         }else{
             printf("Your Buf length is 0\n");
