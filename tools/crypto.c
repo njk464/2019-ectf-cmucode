@@ -109,7 +109,7 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
     unsigned char unverified[len];
     unsigned char ciphertext[verified_len];
     unsigned char pk[crypto_sign_PUBLICKEYBYTES];
-
+    int i;
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
         exit(255);
@@ -120,25 +120,35 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
         memset(pk, 0, sizeof(pk));
         // Read in the data from the files
         get_ciphertext(unverified, len);
+        printf("unverified len: %llu\n", len);
+        printf("unverified: ");
+        print_hex(unverified, len);
         get_key(key);
         get_nonce(nonce);
         get_pk(pk);
         if(game_name != 0) {
             printf("Before check\n");
             if(crypto_sign_open(ciphertext, &verified_len, unverified, len, pk)==0){
+                printf("v len %llu\n",verified_len);
                 // get header
-                unsigned char header[16];
+                unsigned char header[17];
                 strncpy(header, ciphertext, 16);
                 header[16] = '\0';
                 printf("%s\n", header);
-                *ciphertext += 15;
+
+                // copy cipher text to itself-16
+                for (i = 0; i < verified_len-16; i++){
+                        ciphertext[i] = ciphertext[i+16];
+                }
+                ciphertext[i] = '\0';
+                print_hex(ciphertext, verified_len-16);
                 
                 // Pad the cipher text to send to the decrypt function
-                unsigned int padded_len = crypto_secretbox_BOXZEROBYTES + verified_len;
+                unsigned int padded_len = crypto_secretbox_BOXZEROBYTES + verified_len - 16;
                 unsigned char padded[padded_len];
                 memset(padded, 0, sizeof(padded)); 
                 int j = 0;
-                for (int i = 0; i < padded_len; i++){
+                for (i = 0; i < padded_len; i++){
                     if (i < crypto_secretbox_BOXZEROBYTES){
                         continue;
                     } else {
@@ -155,7 +165,7 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
                     unsigned char msg[padded_len];
                     // Move the data to print the string out.
                     // Remove the padding
-                    for (int i = 0; i < padded_len; i++){
+                    for (i = 0; i < padded_len; i++){
                         msg[i] = plaintext[i + crypto_secretbox_BOXZEROBYTES * 2];
                         if (i > len){
                             break;

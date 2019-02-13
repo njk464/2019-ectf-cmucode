@@ -162,7 +162,9 @@ def generate_keys():
     nonce = pysodium.randombytes(pysodium.crypto_secretbox_NONCEBYTES)
     #print(len(nonce))
     #encrypted = box.encrypt(message, nonce)
-    cipherText = pysodium.crypto_secretbox(message, nonce, key)
+    cipherText = pysodium.crypto_secretbox(message, nonce, key) 
+    print("cipherText: 0x"+",0x".join("{:02x}".format(ord(c)) for c in cipherText))
+    print(len(cipherText))
     (message, nonce, key)
     #print(len(cipherText))
     # out_file.write(cipherText)
@@ -187,8 +189,11 @@ def sign_game(message, pk_file):
     signed_encrypted_game = pysodium.crypto_sign(message, sk)
     return signed_encrypted_game, pk
 
-def verify_signature(pk, signed_encrypted):
+def verify_signature(pk, signed_encrypted): 
+    print("signed_encrypted: 0x"+",0x".join("{:02x}".format(ord(c)) for c in signed_encrypted))
+    print(len(signed_encrypted))
     encrypted = pysodium.crypto_sign_open(signed_encrypted, pk)
+    #print("cipherText: 0x"+",0x".join("{:02x}".format(ord(c)) for c in cipherText))
     return encrypted
 
 if __name__ == "__main__":
