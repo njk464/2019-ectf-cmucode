@@ -130,12 +130,21 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
             print_hex(padded, padded_len);
             
 	        unsigned char plaintext[padded_len];
-            memset(plaintext, 0, sizeof(plaintext));
+            //memset(plaintext, 0, sizeof(plaintext));
             if (crypto_secretbox_open(plaintext, padded, padded_len, nonce, key) == -1){
                 printf("integrity violation\n");
                 exit(255);
             } else {
-                printf("Message is: %s\n", plaintext);
+                print_hex(plaintext, padded_len);
+                unsigned char msg[padded_len];
+                for (int i = 0; i < padded_len; i++){
+                    msg[i] = plaintext[i + 32];
+                    if (i > len){
+                        break;
+                    }
+                }
+                print_hex(msg, padded_len);
+                printf("Message is: %s\n", msg);
             }
         }else{
             printf("Your Buf length is 0\n");
