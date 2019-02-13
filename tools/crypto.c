@@ -70,6 +70,13 @@ void get_nonce(unsigned char *ptr){
     fclose(fp);
 }
 
+void output_file(unsigned char *ptr, int message_len){
+    FILE *fp;
+    fp = fopen("test.out", "w");
+    fwrite(ptr, 1, message_len, fp);
+    fclose(fp);
+}
+
 void print_hex(unsigned char *ptr, unsigned int len) {
   	int i;
   	bool first = true;
@@ -133,7 +140,9 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
                         break;
                     }
                 }
-                printf("The message is: %s\n", msg);
+
+                printf("The message is: |%s|\n", msg);
+                output_file(msg, message_len);
             }
         } else {
             printf("Your Buf length is 0\n");

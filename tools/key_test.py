@@ -15,77 +15,6 @@ import nacl.secret
 import pysodium
 import array
 
-
-def main():
-
-    with open("private.pem", "rb") as private_key_file:
-        string = private_key_file.read().decode('utf-8')
-        result = string.split("*****\n")
-        result[0] = result[0].encode()
-        result[1] = result[1].encode()
-        # print(result[0])
-        # print("Next:")
-        # print(result[1])
-        private_key = serialization.load_pem_private_key(
-            result[0],
-            password = None,
-            backend=default_backend()
-        )
-        # message = b"A message I want to sign"
-        f = open("demo_files/2048", 'rb')
-        message = f.read()
-        print(len(message))
-        signature = private_key.sign(
-            message,
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH
-            ),
-            hashes.SHA256()
-        )
-        print(signature)
-        message = bytearray(message)
-        # message[1] = 0x0
-
-    # with open("public.pem", "rb") as public_key_file:
-        public_key = serialization.load_pem_public_key(
-            result[1],
-            backend=default_backend()
-        )
-        public_key.verify(
-            signature,
-            message,
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH
-            ),
-            hashes.SHA256()
-        )
-
-def create_games(f):
-    string = f.read()
-    result = string.split("*****\n")
-    result[0] = result[0].encode()
-    result[1] = result[1].encode()
-    print(result[0])
-    print(result[1])
-    public_key = serialization.load_pem_public_key(
-        result[0],
-        backend=default_backend()
-    )
-    g = open('demo_files/2048', 'rb')
-    data = g.read()
-    ciphertext = public_key.encrypt(
-        data,
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None
-        )
-    )
-    g.write(ciphertext)
-
-
 def write_factory_secrets(f, h):
     """Write any factory secrets. The reference implementation has none
     TODO: Evaluate the size of the keys
@@ -135,44 +64,6 @@ static char* shared_key = \""""
 #endif /* __SECRET_H__ */
 """
     h.write(s)
-
-def new_plan(user, pin):
-    salt = os.urandom(256)
-    # print(salt)
-    digest = hashes.Hash(hashes.SHA512(), backend=default_backend())
-    digest.update(user.encode() + pin.encode() + salt)
-    output = digest.finalize()
-    print(len(output))
-    iv = output[:32]
-    key = output[32:]
-    print(len(iv))
-    print(len(key))
-    game_iv = os.urandom(256)
-    game_key = b'A'*32
-    data = game_key + game_iv
-    aesgcm = AESGCM(key)
-    ct = aesgcm.encrypt(iv, data, None)
-    print(ct)
-
-    pt = aesgcm.decrypt(iv, ct, None)
-    print(pt)
-
-    decrypted_game_key = pt[:32]
-    decrypted_game_iv = pt[32:]
-    print(decrypted_game_key)
-    print(decrypted_game_iv)
-
-    f = open('demo_files/2048', 'rb')
-    game_data = f.read()
-    header = b'THIS IS TOTES A HEADER'
-    data = header + game_data
-    aesgcm = AESGCM(decrypted_game_key)
-    game_ct = aesgcm.encrypt(decrypted_game_iv, data, None)
-
-    print(len(game_ct))
-
-    decrypted_game = aesgcm.decrypt(decrypted_game_iv, game_ct, None)
-    print(decrypted_game[:32])
 
 def open_users(path):
     f_mesh_users_in = open(path, "r")
@@ -260,8 +151,10 @@ def generate_keys(out_file):
 
     # This is our message to send, it must be a bytestring as SecretBox will
     #   treat it as just a binary blob of data.
-    message = b"The president will be exiting through the lower levels"
-    #print(len(message))
+    # message = b"The president will be exiting through the lower levels."
+    f = open('demo_files/2048', 'rb')
+    message = f.read()
+    print(len(message))
     # This is a nonce, it *MUST* only be used once, but it is not considered
     #   secret and can be transmitted or stored alongside the ciphertext. A
     #   good source of nonces are just sequences of 24 random bytes.
@@ -285,7 +178,7 @@ def use_key(key, nonce, cipherText):
     #print("nonce: 0x"+",0x".join("{:02x}".format(ord(c)) for c in nonce))
     #print("key: 0x"+",0x".join("{:02x}".format(ord(c)) for c in key))
     plaintext = pysodium.crypto_secretbox_open(cipherText, nonce, key)
-    print("The message is: " + str(plaintext))
+    # print("The message is: " + str(plaintext))
 
 if __name__ == "__main__":
     # f = open("factorySecrets.txt", "w")
@@ -298,8 +191,6 @@ if __name__ == "__main__":
     # array, key = read_factory_secrets(f)
     # # create_games(f)
     # f.close()
-    # # new_plan("alex", "12345678")
-    # main()
     out_file = open('game.out', 'wb')
     key_file = open('key.out', 'wb')
     nonce_file = open('nonce.out', 'wb')
