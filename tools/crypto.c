@@ -75,10 +75,11 @@ void get_nonce(unsigned char *ptr){
 
 void print_hex(unsigned char *ptr, unsigned int len) {
   	int i;
-  	bool first = false;
+  	bool first = true;
     for (i = 0; i < len; i++) {
     	if(first) {
-            printf("0x%02x,", ptr[i]);
+            printf("0x%02x", ptr[i]);
+            first = false; 
         } else {
             printf(",0x%02x", ptr[i]);
   	    }
