@@ -53,15 +53,13 @@ void get_ciphertext(unsigned char *ptr, unsigned int len){
     FILE *fp;
     fp = fopen("game.out", "r");
     fread(ptr, 1, len, fp);
-    //fgets(ptr, len+1, fp); 
     fclose(fp);
 }
 
 void get_key(unsigned char *ptr){
     FILE *fp;
     fp = fopen("key.out", "r");
-    fread(ptr, 1, crypto_box_SEEDBYTES, fp);
-    //fgets(ptr, crypto_box_SEEDBYTES, fp); 
+    fread(ptr, 1, crypto_secretbox_KEYBYTES, fp);
     fclose(fp);
 }
 
@@ -69,7 +67,6 @@ void get_nonce(unsigned char *ptr){
     FILE *fp;
     fp = fopen("nonce.out", "r");
     fread(ptr, 1, crypto_secretbox_NONCEBYTES, fp);
-    //fgets(ptr, crypto_secretbox_NONCEBYTES, fp);
     fclose(fp);
 }
 
@@ -89,16 +86,15 @@ void print_hex(unsigned char *ptr, unsigned int len) {
 
 void decrypt_buffer(char* game_name, unsigned char *key_data){
     //unsigned char salt[]; get_salt();
-    unsigned char key[crypto_box_SEEDBYTES];
-    printf("SEEDBYTES: %d\n",crypto_box_SEEDBYTES);
-    unsigned char nonce[crypto_secretbox_NONCEBYTES + 1];
+    unsigned char key[crypto_secretbox_KEYBYTES];
+    printf("KEYBYTES: %d\n",crypto_secretbox_KEYBYTES);
+    unsigned char nonce[crypto_secretbox_NONCEBYTES];
     printf("NONCEBYES: %d\n",crypto_secretbox_NONCEBYTES);
     unsigned int len;
     len = get_len();
     unsigned int message_len = len - crypto_secretbox_MACBYTES;
-    unsigned char ciphertext[len + 1];
+    unsigned char ciphertext[len];
     printf("len: %d\n", len);
-	unsigned char plaintext[message_len];
     printf("message len: %d\n", message_len);
 
     if (sodium_init() < 0) {
@@ -108,7 +104,6 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
         memset(key, 0, sizeof(key));
         memset(nonce, 0, sizeof(nonce));
 		memset(ciphertext, 0, sizeof(ciphertext));
-        memset(plaintext, 0, sizeof(plaintext));
         get_ciphertext(ciphertext, len);
         get_key(key);
         get_nonce(nonce);
@@ -119,8 +114,24 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
             print_hex(nonce, crypto_secretbox_NONCEBYTES);
             printf("key: ");
             print_hex(key, crypto_box_SEEDBYTES);
-            if (crypto_secretbox_open(plaintext, ciphertext, len, nonce, key) == -1){
-                printf("Message is: %s\n", plaintext);
+            unsigned int padded_len = crypto_secretbox_BOXZEROBYTES + len;
+            unsigned char padded[padded_len];
+            memset(padded, 0, sizeof(padded)); 
+            int j = 0;
+            for (int i = 0; i < padded_len; i++){
+                if (i < crypto_secretbox_BOXZEROBYTES){
+                    continue;
+                } else {
+                    padded[i] = ciphertext[j];
+                    j++;
+                }
+            }
+            printf("Padded: ");
+            print_hex(padded, padded_len);
+            
+	        unsigned char plaintext[padded_len];
+            memset(plaintext, 0, sizeof(plaintext));
+            if (crypto_secretbox_open(plaintext, padded, padded_len, nonce, key) == -1){
                 printf("integrity violation\n");
                 exit(255);
             } else {

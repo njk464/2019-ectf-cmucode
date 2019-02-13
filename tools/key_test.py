@@ -266,7 +266,7 @@ def generate_keys(out_file):
     #   secret and can be transmitted or stored alongside the ciphertext. A
     #   good source of nonces are just sequences of 24 random bytes.
     #nonce = nacl.utils.random(nacl.secret.SecretBox.NONCE_SIZE)
-    nonce = nonce = pysodium.randombytes(pysodium.crypto_secretbox_NONCEBYTES)
+    nonce = pysodium.randombytes(pysodium.crypto_secretbox_NONCEBYTES)
     print(len(nonce))
     #encrypted = box.encrypt(message, nonce)
     cipherText = pysodium.crypto_secretbox(message, nonce, key)
@@ -276,10 +276,10 @@ def generate_keys(out_file):
 
     return key, nonce
 
-def use_key(key, nonce, file):
+def use_key(key, nonce, cipherText):
 
     #box = nacl.secret.SecretBox(key)
-    cipherText = file.read()
+    #cipherText = file.read()
     #plaintext = box.decrypt(encrypted, nonce)
     print("cipherText: 0x"+",0x".join("{:02x}".format(ord(c)) for c in cipherText))
     print("nonce: 0x"+",0x".join("{:02x}".format(ord(c)) for c in nonce))
@@ -309,5 +309,7 @@ if __name__ == "__main__":
     out_file.close()
     key_file.close()
     nonce_file.close()
-    decrypt_file = open('game.out', 'rb')
-    use_key(key, nonce, decrypt_file)
+    cipherText = open('game.out', 'rb').read()
+    key = open('key.out', 'rb').read()
+    nonce = open('nonce.out', 'rb').read()
+    use_key(key, nonce, cipherText)
