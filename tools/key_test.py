@@ -151,9 +151,9 @@ def generate_keys():
 
     # This is our message to send, it must be a bytestring as SecretBox will
     #   treat it as just a binary blob of data.
-    # message = b"The president will be exiting through the lower levels."
-    f = open('demo_files/2048', 'rb')
-    message = f.read()
+    message = b"The president will be exiting through the lower levels."
+    # f = open('demo_files/2048', 'rb')
+    # message = f.read()
     print(len(message))
     # This is a nonce, it *MUST* only be used once, but it is not considered
     #   secret and can be transmitted or stored alongside the ciphertext. A
