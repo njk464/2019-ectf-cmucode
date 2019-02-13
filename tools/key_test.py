@@ -9,8 +9,8 @@ import os
 import re
 import pickle
 
-import nacl.utils
-import nacl.secret
+#import nacl.utils
+#import nacl.secret
 
 import pysodium
 import array

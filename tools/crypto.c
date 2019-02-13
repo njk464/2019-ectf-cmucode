@@ -102,10 +102,10 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
     //unsigned char salt[]; get_salt();
     unsigned char key[crypto_secretbox_KEYBYTES];
     unsigned char nonce[crypto_secretbox_NONCEBYTES];
-    unsigned int len;
+    long long unsigned int len;
     len = get_len();
-    unsigned int verified_len = len - crypto_sign_BYTES;
-    unsigned int message_len = len - crypto_secretbox_MACBYTES - crypto_sign_BYTES;
+    long long unsigned int verified_len = len - crypto_sign_BYTES;
+    unsigned int message_len = verified_len - crypto_secretbox_MACBYTES;
     unsigned char unverified[len];
     unsigned char ciphertext[verified_len];
     unsigned char pk[crypto_sign_PUBLICKEYBYTES];
@@ -119,14 +119,20 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
 		memset(ciphertext, 0, sizeof(ciphertext));
         memset(pk, 0, sizeof(pk));
         // Read in the data from the files
-        get_ciphertext(ciphertext, len);
+        get_ciphertext(unverified, len);
         get_key(key);
         get_nonce(nonce);
         get_pk(pk);
         if(game_name != 0) {
             printf("Before check\n");
-            if(crypto_sign_open(ciphertext, len, unverified, len, pk)==0){
-                printf("%s", ciphertext);
+            if(crypto_sign_open(ciphertext, &verified_len, unverified, len, pk)==0){
+                // get header
+                unsigned char header[16];
+                strncpy(header, ciphertext, 16);
+                header[16] = '\0';
+                printf("%s\n", header);
+                *ciphertext += 15;
+                
                 // Pad the cipher text to send to the decrypt function
                 unsigned int padded_len = crypto_secretbox_BOXZEROBYTES + verified_len;
                 unsigned char padded[padded_len];
