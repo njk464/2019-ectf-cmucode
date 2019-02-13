@@ -13,6 +13,8 @@ import nacl.utils
 import nacl.secret
 
 import pysodium
+import array
+
 
 def main():
 
@@ -252,22 +254,24 @@ def generate_keys(out_file):
     # This must be kept secret, this is the combination to your safe
     #key = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
     key = pysodium.randombytes(pysodium.crypto_secretbox_KEYBYTES)
-
+    print(len(key))
     # This is your safe, you can use it to encrypt or decrypt messages
     #box = nacl.secret.SecretBox(key)
 
     # This is our message to send, it must be a bytestring as SecretBox will
     #   treat it as just a binary blob of data.
     message = b"The president will be exiting through the lower levels"
-
+    print(len(message))
     # This is a nonce, it *MUST* only be used once, but it is not considered
     #   secret and can be transmitted or stored alongside the ciphertext. A
     #   good source of nonces are just sequences of 24 random bytes.
     #nonce = nacl.utils.random(nacl.secret.SecretBox.NONCE_SIZE)
     nonce = nonce = pysodium.randombytes(pysodium.crypto_secretbox_NONCEBYTES)
-
+    print(len(nonce))
     #encrypted = box.encrypt(message, nonce)
     cipherText = pysodium.crypto_secretbox(message, nonce, key)
+    (message, nonce, key)
+    print(len(cipherText))
     out_file.write(cipherText)
 
     return key, nonce
@@ -277,7 +281,10 @@ def use_key(key, nonce, file):
     #box = nacl.secret.SecretBox(key)
     cipherText = file.read()
     #plaintext = box.decrypt(encrypted, nonce)
-    plaintext = pysodium.crypto_secretbox_open(cipherText, nonce, key) 
+    print("cipherText: 0x"+",0x".join("{:02x}".format(ord(c)) for c in cipherText))
+    print("nonce: 0x"+",0x".join("{:02x}".format(ord(c)) for c in nonce))
+    print("key: 0x"+",0x".join("{:02x}".format(ord(c)) for c in key))
+    plaintext = pysodium.crypto_secretbox_open(cipherText, nonce, key)
     print(plaintext)
 
 if __name__ == "__main__":

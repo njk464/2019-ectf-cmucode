@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define SALT_LEN 64
 
@@ -58,7 +59,8 @@ void get_ciphertext(unsigned char *ptr, unsigned int len){
 void get_key(unsigned char *ptr){
     FILE *fp;
     fp = fopen("key.out", "r");
-    fgets(ptr, crypto_box_SEEDBYTES, fp); 
+    fread(ptr, 1, crypto_box_SEEDBYTES*2, fp);
+    //fgets(ptr, crypto_box_SEEDBYTES, fp); 
     fclose(fp);
 }
 
@@ -69,16 +71,29 @@ void get_nonce(unsigned char *ptr){
     fclose(fp);
 }
 
+void print_hex(unsigned char *ptr, unsigned int len) {
+  	int i;
+  	bool first = false;
+    for (i = 0; i < len; i++) {
+    	if(first) {
+            printf("0x%02x,", ptr[i]);
+        } else {
+            printf(",0x%02x", ptr[i]);
+  	    }
+    }
+  	printf("\n");
+}
+
 void decrypt_buffer(char* game_name, unsigned char *key_data){
     //unsigned char salt[]; get_salt();
     unsigned char key[crypto_box_SEEDBYTES];
     printf("SEEDBYTES: %d\n",crypto_box_SEEDBYTES);
-    unsigned char nonce[crypto_secretbox_NONCEBYTES];
+    unsigned char nonce[crypto_secretbox_NONCEBYTES + 1];
     printf("NONCEBYES: %d\n",crypto_secretbox_NONCEBYTES);
     unsigned int len;
     len = get_len();
     unsigned int message_len = len - crypto_secretbox_MACBYTES;
-    unsigned char ciphertext[len];
+    unsigned char ciphertext[len + 1];
     printf("len: %d\n", len);
 	unsigned char plaintext[message_len];
     printf("message len: %d\n", message_len);
@@ -90,11 +105,19 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
         memset(key, 0, sizeof(key));
         memset(nonce, 0, sizeof(nonce));
 		memset(ciphertext, 0, sizeof(ciphertext));
+        memset(plaintext, 0, sizeof(plaintext));
         get_ciphertext(ciphertext, len);
         get_key(key);
         get_nonce(nonce);
         if(game_name != 0) {
+            printf("cipherText: ");
+			print_hex(ciphertext, len);
+            printf("nonce: ");
+            print_hex(nonce, crypto_secretbox_NONCEBYTES);
+            printf("key: ");
+            print_hex(key, crypto_box_SEEDBYTES);
             if (crypto_secretbox_open(plaintext, ciphertext, len, nonce, key) == -1){
+                printf("Message is: %s\n", plaintext);
                 printf("integrity violation\n");
                 exit(255);
             } else {
