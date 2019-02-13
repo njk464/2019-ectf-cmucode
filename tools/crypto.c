@@ -52,14 +52,15 @@ unsigned int get_len(){
 void get_ciphertext(unsigned char *ptr, unsigned int len){
     FILE *fp;
     fp = fopen("game.out", "r");
-    fgets(ptr, len, fp); 
+    fread(ptr, 1, len, fp);
+    //fgets(ptr, len+1, fp); 
     fclose(fp);
 }
 
 void get_key(unsigned char *ptr){
     FILE *fp;
     fp = fopen("key.out", "r");
-    fread(ptr, 1, crypto_box_SEEDBYTES*2, fp);
+    fread(ptr, 1, crypto_box_SEEDBYTES, fp);
     //fgets(ptr, crypto_box_SEEDBYTES, fp); 
     fclose(fp);
 }
@@ -67,7 +68,8 @@ void get_key(unsigned char *ptr){
 void get_nonce(unsigned char *ptr){
     FILE *fp;
     fp = fopen("nonce.out", "r");
-    fgets(ptr, crypto_secretbox_NONCEBYTES, fp);
+    fread(ptr, 1, crypto_secretbox_NONCEBYTES, fp);
+    //fgets(ptr, crypto_secretbox_NONCEBYTES, fp);
     fclose(fp);
 }
 
