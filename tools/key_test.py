@@ -141,7 +141,7 @@ def read_factory_secrets(f):
     # print(array)
     return array, key
 
-def generate_keys(out_file):
+def generate_keys():
     # This must be kept secret, this is the combination to your safe
     #key = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
     key = pysodium.randombytes(pysodium.crypto_secretbox_KEYBYTES)
@@ -165,9 +165,9 @@ def generate_keys(out_file):
     cipherText = pysodium.crypto_secretbox(message, nonce, key)
     (message, nonce, key)
     #print(len(cipherText))
-    out_file.write(cipherText)
+    # out_file.write(cipherText)
 
-    return key, nonce
+    return cipherText, key, nonce
 
 def use_key(key, nonce, cipherText):
 
@@ -179,6 +179,17 @@ def use_key(key, nonce, cipherText):
     #print("key: 0x"+",0x".join("{:02x}".format(ord(c)) for c in key))
     plaintext = pysodium.crypto_secretbox_open(cipherText, nonce, key)
     # print("The message is: " + str(plaintext))
+
+def sign_game(message, pk_file):
+    pk, sk = pysodium.crypto_sign_keypair()
+    pk_file.write(pk)
+    message = b'THIS IS A HEADER' + message
+    signed_encrypted_game = pysodium.crypto_sign(message, sk)
+    return signed_encrypted_game, pk
+
+def verify_signature(pk, signed_encrypted):
+    encrypted = pysodium.crypto_sign_open(signed_encrypted, pk)
+    return encrypted
 
 if __name__ == "__main__":
     # f = open("factorySecrets.txt", "w")
@@ -194,13 +205,19 @@ if __name__ == "__main__":
     out_file = open('game.out', 'wb')
     key_file = open('key.out', 'wb')
     nonce_file = open('nonce.out', 'wb')
-    key, nonce = generate_keys(out_file)
+    pk_file = open('pk.out','wb')
+    ciphertext, key, nonce = generate_keys()
+    signed_encrypted, pk = sign_game(ciphertext, pk_file)
+    out_file.write(signed_encrypted)
     key_file.write(key)
     nonce_file.write(nonce)
     out_file.close()
     key_file.close()
     nonce_file.close()
-    cipherText = open('game.out', 'rb').read()
-    key = open('key.out', 'rb').read()
-    nonce = open('nonce.out', 'rb').read()
-    use_key(key, nonce, cipherText)
+    pk_file.close()
+    # cipherText = open('game.out', 'rb').read()
+    # key = open('key.out', 'rb').read()
+    # nonce = open('nonce.out', 'rb').read()
+    cipherText = verify_signature(pk, signed_encrypted)
+    print(cipherText[:16])
+    # use_key(key, nonce, cipherText)

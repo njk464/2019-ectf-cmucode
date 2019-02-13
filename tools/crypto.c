@@ -77,6 +77,13 @@ void output_file(unsigned char *ptr, int message_len){
     fclose(fp);
 }
 
+void get_pk(unsigned char *ptr){
+    FILE *fp;
+    fp = fopen("pk.out", "r");
+    fread(ptr, 1, crypto_sign_PUBLICKEYBYTES, fp);
+    fclose(fp);
+}
+
 void print_hex(unsigned char *ptr, unsigned int len) {
   	int i;
   	bool first = true;
@@ -97,8 +104,11 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
     unsigned char nonce[crypto_secretbox_NONCEBYTES];
     unsigned int len;
     len = get_len();
-    unsigned int message_len = len - crypto_secretbox_MACBYTES;
-    unsigned char ciphertext[len];
+    unsigned int verified_len = len - crypto_sign_BYTES;
+    unsigned int message_len = len - crypto_secretbox_MACBYTES - crypto_sign_BYTES;
+    unsigned char unverified[len];
+    unsigned char ciphertext[verified_len];
+    unsigned char pk[crypto_sign_PUBLICKEYBYTES];
 
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
@@ -107,42 +117,48 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
         memset(key, 0, sizeof(key));
         memset(nonce, 0, sizeof(nonce));
 		memset(ciphertext, 0, sizeof(ciphertext));
+        memset(pk, 0, sizeof(pk));
         // Read in the data from the files
         get_ciphertext(ciphertext, len);
         get_key(key);
         get_nonce(nonce);
+        get_pk(pk);
         if(game_name != 0) {
-            // Pad the cipher text to send to the decrypt function
-            unsigned int padded_len = crypto_secretbox_BOXZEROBYTES + len;
-            unsigned char padded[padded_len];
-            memset(padded, 0, sizeof(padded)); 
-            int j = 0;
-            for (int i = 0; i < padded_len; i++){
-                if (i < crypto_secretbox_BOXZEROBYTES){
-                    continue;
-                } else {
-                    padded[i] = ciphertext[j];
-                    j++;
-                }
-            }
-	        unsigned char plaintext[padded_len];
-            // perform the decrypt
-            if (crypto_secretbox_open(plaintext, padded, padded_len, nonce, key) == -1){
-                printf("integrity violation\n");
-                exit(255);
-            } else {
-                unsigned char msg[padded_len];
-                // Move the data to print the string out.
-                // Remove the padding
+            printf("Before check\n");
+            if(crypto_sign_open(ciphertext, len, unverified, len, pk)==0){
+                printf("%s", ciphertext);
+                // Pad the cipher text to send to the decrypt function
+                unsigned int padded_len = crypto_secretbox_BOXZEROBYTES + verified_len;
+                unsigned char padded[padded_len];
+                memset(padded, 0, sizeof(padded)); 
+                int j = 0;
                 for (int i = 0; i < padded_len; i++){
-                    msg[i] = plaintext[i + crypto_secretbox_BOXZEROBYTES * 2];
-                    if (i > len){
-                        break;
+                    if (i < crypto_secretbox_BOXZEROBYTES){
+                        continue;
+                    } else {
+                        padded[i] = ciphertext[j];
+                        j++;
                     }
                 }
+                unsigned char plaintext[padded_len];
+                // perform the decrypt
+                if (crypto_secretbox_open(plaintext, padded, padded_len, nonce, key) == -1){
+                    printf("integrity violation\n");
+                    exit(255);
+                } else {
+                    unsigned char msg[padded_len];
+                    // Move the data to print the string out.
+                    // Remove the padding
+                    for (int i = 0; i < padded_len; i++){
+                        msg[i] = plaintext[i + crypto_secretbox_BOXZEROBYTES * 2];
+                        if (i > len){
+                            break;
+                        }
+                    }
 
-                printf("The message is: |%s|\n", msg);
-                output_file(msg, message_len);
+                    printf("The message is: |%s|\n", msg);
+                    output_file(msg, message_len);
+                }
             }
         } else {
             printf("Your Buf length is 0\n");
