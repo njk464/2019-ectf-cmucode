@@ -87,15 +87,11 @@ void print_hex(unsigned char *ptr, unsigned int len) {
 void decrypt_buffer(char* game_name, unsigned char *key_data){
     //unsigned char salt[]; get_salt();
     unsigned char key[crypto_secretbox_KEYBYTES];
-    printf("KEYBYTES: %d\n",crypto_secretbox_KEYBYTES);
     unsigned char nonce[crypto_secretbox_NONCEBYTES];
-    printf("NONCEBYES: %d\n",crypto_secretbox_NONCEBYTES);
     unsigned int len;
     len = get_len();
     unsigned int message_len = len - crypto_secretbox_MACBYTES;
     unsigned char ciphertext[len];
-    printf("len: %d\n", len);
-    printf("message len: %d\n", message_len);
 
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
@@ -104,16 +100,12 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
         memset(key, 0, sizeof(key));
         memset(nonce, 0, sizeof(nonce));
 		memset(ciphertext, 0, sizeof(ciphertext));
+        // Read in the data from the files
         get_ciphertext(ciphertext, len);
         get_key(key);
         get_nonce(nonce);
         if(game_name != 0) {
-            printf("cipherText: ");
-			print_hex(ciphertext, len);
-            printf("nonce: ");
-            print_hex(nonce, crypto_secretbox_NONCEBYTES);
-            printf("key: ");
-            print_hex(key, crypto_box_SEEDBYTES);
+            // Pad the cipher text to send to the decrypt function
             unsigned int padded_len = crypto_secretbox_BOXZEROBYTES + len;
             unsigned char padded[padded_len];
             memset(padded, 0, sizeof(padded)); 
@@ -126,27 +118,24 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
                     j++;
                 }
             }
-            printf("Padded: ");
-            print_hex(padded, padded_len);
-            
 	        unsigned char plaintext[padded_len];
-            //memset(plaintext, 0, sizeof(plaintext));
+            // perform the decrypt
             if (crypto_secretbox_open(plaintext, padded, padded_len, nonce, key) == -1){
                 printf("integrity violation\n");
                 exit(255);
             } else {
-                print_hex(plaintext, padded_len);
                 unsigned char msg[padded_len];
+                // Move the data to print the string out.
+                // Remove the padding
                 for (int i = 0; i < padded_len; i++){
-                    msg[i] = plaintext[i + 32];
+                    msg[i] = plaintext[i + crypto_secretbox_BOXZEROBYTES * 2];
                     if (i > len){
                         break;
                     }
                 }
-                print_hex(msg, padded_len);
-                printf("Message is: %s\n", msg);
+                printf("The message is: %s\n", msg);
             }
-        }else{
+        } else {
             printf("Your Buf length is 0\n");
         }
     return;
