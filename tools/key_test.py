@@ -189,12 +189,18 @@ def sign_game(message, pk_file):
     signed_encrypted_game = pysodium.crypto_sign(message, sk)
     return signed_encrypted_game, pk
 
-def verify_signature(pk, signed_encrypted): 
+def verify_signature(pk, signed_encrypted):
     #print("signed_encrypted: 0x"+",0x".join("{:02x}".format(ord(c)) for c in signed_encrypted))
     #print(len(signed_encrypted))
     encrypted = pysodium.crypto_sign_open(signed_encrypted, pk)
     #print("cipherText: 0x"+",0x".join("{:02x}".format(ord(c)) for c in cipherText))
     return encrypted
+
+def gen_userkey(user, pin, game_name, version_num):
+    password = str(user) + str(pin) + str(game_name) + str(version)
+    salt = os.random(psodium.crypto_pwhash_SALTBYTES)
+    key = pysodium.crypto_pwhash(256, password, salt, crypto_pwhash_OPSLIMIT_MIN, crypto_pwhash_MEMLIMIT_MIN)
+    return key
 
 if __name__ == "__main__":
     # f = open("factorySecrets.txt", "w")
@@ -207,6 +213,7 @@ if __name__ == "__main__":
     # array, key = read_factory_secrets(f)
     # # create_games(f)
     # f.close()
+    print(gen_userkey("user1", "12345678", "2048", "1.1"))
     out_file = open('game.out', 'wb')
     key_file = open('key.out', 'wb')
     nonce_file = open('nonce.out', 'wb')
