@@ -151,9 +151,9 @@ def generate_keys():
 
     # This is our message to send, it must be a bytestring as SecretBox will
     #   treat it as just a binary blob of data.
-    # message = b"The president will be exiting through the lower levels."
-    f = open('demo_files/2048', 'rb')
-    message = f.read()
+    message = b"The president will be exiting through the lower levels."
+    #f = open('demo_files/2048', 'rb')
+    #message = f.read()
     print(len(message))
     # This is a nonce, it *MUST* only be used once, but it is not considered
     #   secret and can be transmitted or stored alongside the ciphertext. A
@@ -171,6 +171,17 @@ def generate_keys():
 
     return cipherText, key, nonce
 
+def encrypt_game_key(user_key, game_key, game_nonce):
+    #print(game_key)
+    #print(game_nonce)
+    gamekey_nonce = game_key + game_nonce
+    #print(gamekey_nonce)
+    nonce = pysodium.randombytes(pysodium.crypto_secretbox_NONCEBYTES)
+    encrypted_gamekey_nonce = pysodium.crypto_secretbox(gamekey_nonce, nonce, user_key) 
+    #print(nonce)
+ #print(encrypted_gamekey_nonce)
+    return encrypted_gamekey_nonce, nonce
+
 def use_key(key, nonce, cipherText):
 
     #box = nacl.secret.SecretBox(key)
@@ -181,6 +192,7 @@ def use_key(key, nonce, cipherText):
     #print("key: 0x"+",0x".join("{:02x}".format(ord(c)) for c in key))
     plaintext = pysodium.crypto_secretbox_open(cipherText, nonce, key)
     # print("The message is: " + str(plaintext))
+    return plaintext
 
 def sign_game(message, pk_file):
     pk, sk = pysodium.crypto_sign_keypair()
@@ -196,11 +208,12 @@ def verify_signature(pk, signed_encrypted):
     #print("cipherText: 0x"+",0x".join("{:02x}".format(ord(c)) for c in cipherText))
     return encrypted
 
-def gen_userkey(user, pin, game_name, version_num):
+def gen_userkey(user, pin, game_name, version):
     password = str(user) + str(pin) + str(game_name) + str(version)
-    salt = os.random(psodium.crypto_pwhash_SALTBYTES)
-    key = pysodium.crypto_pwhash(256, password, salt, crypto_pwhash_OPSLIMIT_MIN, crypto_pwhash_MEMLIMIT_MIN)
-    return key
+    salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
+    key = pysodium.crypto_pwhash(32, password, salt, pysodium.crypto_pwhash_OPSLIMIT_MIN, pysodium.crypto_pwhash_MEMLIMIT_MIN, 2)
+    print(key)
+    return salt, key
 
 if __name__ == "__main__":
     # f = open("factorySecrets.txt", "w")
@@ -213,16 +226,22 @@ if __name__ == "__main__":
     # array, key = read_factory_secrets(f)
     # # create_games(f)
     # f.close()
-    print(gen_userkey("user1", "12345678", "2048", "1.1"))
+    salt, user_key = gen_userkey("user1", "12345678", "2048", "1.1")
+    salt_patrol = open("salt.patrol", 'wb')
+    salt_patrol.write(user_key)
+    salt_patrol.close()
+    salt_file = open("salt.out", 'wb')
+    salt_file.write(salt)
+    salt_file.close()
     out_file = open('game.out', 'wb')
     key_file = open('key.out', 'wb')
     nonce_file = open('nonce.out', 'wb')
     pk_file = open('pk.out','wb')
-    ciphertext, key, nonce = generate_keys()
+    ciphertext, game_key, game_nonce = generate_keys()
     signed_encrypted, pk = sign_game(ciphertext, pk_file)
     out_file.write(signed_encrypted)
-    key_file.write(key)
-    nonce_file.write(nonce)
+    key_file.write(game_key)
+    nonce_file.write(game_nonce)
     out_file.close()
     key_file.close()
     nonce_file.close()
@@ -230,6 +249,19 @@ if __name__ == "__main__":
     # cipherText = open('game.out', 'rb').read()
     # key = open('key.out', 'rb').read()
     # nonce = open('nonce.out', 'rb').read()
-    cipherText = verify_signature(pk, signed_encrypted)
-    print(cipherText[:16])
+    encoded_gamekey_nonce, user_nonce  = encrypt_game_key(user_key, game_key, game_nonce)
+    key_nonce = open('key_nonce.out','wb')
+    key_nonce.write(encoded_gamekey_nonce)
+    key_nonce.close()
+    user_nonce_file = open('user_nonce.out', 'wb')
+    user_nonce_file.write(user_nonce)
+    user_nonce_file.close()
+    derived_gamekey_nonce = use_key(user_key, user_nonce, encoded_gamekey_nonce)
+    print(derived_gamekey_nonce)
+    derived_gamekey = derived_gamekey_nonce[:32]
+    derived_nonce = derived_gamekey_nonce[32:]
+    message = use_key(derived_gamekey, derived_nonce, ciphertext)
+    print(message)
+    #cipherText = verify_signature(pk, signed_encrypted)
+    #print(cipherText[:16])
     # use_key(key, nonce, cipherText)

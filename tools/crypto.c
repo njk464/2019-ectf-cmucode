@@ -6,10 +6,10 @@
 
 #define HEADER_LEN 16
 
-unsigned int get_len(){
+unsigned int get_len(char *file_name){
     FILE *fp;
     unsigned int len;
-    fp = fopen("game.out", "r");     
+    fp = fopen(file_name, "r");     
     fseek(fp, 0, SEEK_END);
     len = ftell(fp);
     fclose(fp);
@@ -32,7 +32,7 @@ void get_key(unsigned char *ptr){
 
 void get_nonce(unsigned char *ptr){
     FILE *fp;
-    fp = fopen("nonce.out", "r");
+    fp = fopen("key_nonce.out", "r");
     fread(ptr, 1, crypto_secretbox_NONCEBYTES, fp);
     fclose(fp);
 }
@@ -55,6 +55,13 @@ void get_salt(unsigned char *ptr){
     FILE *fp;
     fp = fopen("salt.out", "r");
     fread(ptr, 1, crypto_pwhash_SALTBYTES, fp);
+    fclose(fp);
+}
+
+void read_from_file(unsigned char *ptr, unsigned char *file_name, unsigned int len){
+    FILE *fp;
+    fp = fopen(file_name,"r");
+    fread(ptr, 1, len, fp);
     fclose(fp);
 }
 
@@ -100,12 +107,52 @@ void gen_userkey(char *key, char* name, char* pin, char* game_name, char* versio
 	}
 }
 
+// Returns valud in message
+void decrypt(char* key, char * nonce, char* message, unsigned int len){
+    int plaintext_len = len - crypto_secretbox_MACBYTES;
+    int padded_len = len + crypto_secretbox_BOXZEROBYTES;
+    unsigned char padded_plaintext[padded_len];
+    unsigned char padded_ciphertext[padded_len];
+
+
+    memset(padded_ciphertext, 0, padded_len); 
+    int j = 0;
+    int i;
+    for (i = 0; i < padded_len; i++){
+        if (i < crypto_secretbox_BOXZEROBYTES){
+            continue;
+        } else {
+            padded_ciphertext[i] = message[j];
+            j++;
+        }
+    }
+
+
+    if (crypto_secretbox_open(padded_plaintext, padded_ciphertext, padded_len, nonce, key) == -1){
+        printf("Decrypt Fail\n");
+        exit(0);
+    } else {
+        unsigned char plaintext[plaintext_len];
+        // Move the data to print the string out.
+        // Remove the padding
+        for (i = 0; i < plaintext_len; i++){
+            plaintext[i] = padded_plaintext[i + crypto_secretbox_BOXZEROBYTES * 2];
+            if (i > len){
+                break;
+            }
+        }
+
+        printf("The message is: |%s|\n", plaintext);
+        
+    }
+}
+
 void decrypt_buffer(char* game_name, unsigned char *key_data){
     unsigned char game_key[crypto_secretbox_KEYBYTES];
     unsigned char game_nonce[crypto_secretbox_NONCEBYTES];
     // This is the len of the entire file, signed.
     long long unsigned int file_len;
-    file_len = get_len();
+    file_len = get_len("game.out");
     // This is the len of the entire file, not signed. 
     long long unsigned int unsigned_file_len = file_len - crypto_sign_BYTES;
     // The is the unencrypted message length
@@ -181,7 +228,17 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
 }
 
 int main(){
-    char key[32];
-    gen_userkey(key,"user1", "12345678", "2048", "1.1");
+    char user_key[32];
+    gen_userkey(user_key,"user1", "12345678", "2048", "1.1");
+    // read user nonce.
+    char user_nonce[crypto_secretbox_NONCEBYTES];
+    read_from_file(user_nonce, "user_nonce.out", crypto_secretbox_NONCEBYTES);
+    // gamekey_nonce
+    char gamekey_nonce[crypto_secretbox_KEYBYTES + crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES];
+    read_from_file(gamekey_nonce, "key_nonce.out", crypto_secretbox_KEYBYTES + crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES);
+    int len;
+    len = get_len("key_nonce.out");
+    // use that to decrypt game.out
+    decrypt(user_key, user_nonce, gamekey_nonce, len);
     //decrypt_buffer("game.out", "temp_key_data");
 }
