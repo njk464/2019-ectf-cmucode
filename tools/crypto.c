@@ -51,6 +51,13 @@ void get_pk(unsigned char *ptr){
     fclose(fp);
 }
 
+void get_salt(unsigned char *ptr){ 
+    FILE *fp;
+    fp = fopen("salt.out", "r");
+    fread(ptr, 1, crypto_pwhash_SALTBYTES, fp);
+    fclose(fp);
+}
+
 void print_hex(unsigned char *ptr, unsigned int len) {
   	int i;
   	bool first = true;
@@ -63,6 +70,34 @@ void print_hex(unsigned char *ptr, unsigned int len) {
   	    }
     }
   	printf("\n");
+}
+
+void gen_userkey(char *key, char* name, char* pin, char* game_name, char* version){
+//#define MAX_USERNAME_LENGTH 15
+//#define MAX_PIN_LENGTH 8
+//#define MAX_GAME_LENGTH 31
+//#define MAX_NUM_USERS 5
+    memset(key, 0, 32);
+    //TODO: sketch
+    int MAX_PASSWORD_SIZE = 15 + 8 + 31 + 5; 
+    char password[MAX_PASSWORD_SIZE];
+    //memset(password, 0, sizeof(password));
+    sprintf(password, "%s%s%s%s", name, pin, game_name, version);
+    //printf("password = %s\n", password);
+    // PASSWORD = name + pin + game_name + version
+    char salt[crypto_pwhash_SALTBYTES];
+    get_salt(salt);
+    if (crypto_pwhash(key, 32, password, strlen(password), salt, 
+			crypto_pwhash_OPSLIMIT_MIN, crypto_pwhash_MEMLIMIT_MIN,
+     		crypto_pwhash_ALG_DEFAULT) == 0) {
+		printf("key: ");
+        print_hex(key, 32);
+        printf("worked\n");
+	} else {
+		printf("key: ");
+        print_hex(key, 32);
+		printf("RIP\n");    
+	}
 }
 
 void decrypt_buffer(char* game_name, unsigned char *key_data){
@@ -146,5 +181,7 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
 }
 
 int main(){
-    decrypt_buffer("game.out", "temp_key_data");
+    char key[32];
+    gen_userkey(key,"user1", "12345678", "2048", "1.1");
+    //decrypt_buffer("game.out", "temp_key_data");
 }
