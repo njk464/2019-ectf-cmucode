@@ -197,7 +197,7 @@ def use_key(key, nonce, cipherText):
 def sign_game(message, pk_file):
     pk, sk = pysodium.crypto_sign_keypair()
     pk_file.write(pk)
-    message = b'THIS IS A HEADER' + message
+    #message = b'THIS IS A HEADER' + message
     signed_encrypted_game = pysodium.crypto_sign(message, sk)
     return signed_encrypted_game, pk
 
@@ -227,9 +227,9 @@ if __name__ == "__main__":
     # # create_games(f)
     # f.close()
     salt, user_key = gen_userkey("user1", "12345678", "2048", "1.1")
-    salt_patrol = open("salt.patrol", 'wb')
-    salt_patrol.write(user_key)
-    salt_patrol.close()
+    #salt_patrol = open("salt.patrol", 'wb')
+    #salt_patrol.write(user_key)
+    #salt_patrol.close()
     salt_file = open("salt.out", 'wb')
     salt_file.write(salt)
     salt_file.close()
@@ -271,4 +271,4 @@ if __name__ == "__main__":
     print(message)
     #cipherText = verify_signature(pk, signed_encrypted)
     #print(cipherText[:16])
-    # use_key(key, nonce, cipherText)
+    #use_key(key, nonce, cipherText)
