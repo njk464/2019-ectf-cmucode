@@ -4,40 +4,7 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define SALT_LEN 64
-
-/*void encrypt_game(char* game_name, unsigned char *key_data){
-
-    unsigned char salt[SALT_LEN] = read_salt();
-    unsigned char key[KEY_LEN] = get_key();
-    unsigned char nonce[NONCE_LEN] = get_nonce();
-    unsigned char* ciphertext = read_in_game(game_name);
-    
-    if (sodium_init() < 0) {
-        printf("Error in Crypto Library\n");
-       	// Unsure if this is the correct way to terminate. 	
-		exit(255);
-    } else {
-        memset(key, 0, sizeof(key));
-		
-        crypto_pwhash
-            (key, sizeof key, key_data, strlen(key_data), salt,
-            crypto_pwhash_OPSLIMIT_INTERACTIVE, crypto_pwhash_MEMLIMIT_INTERACTIVE,
-            crypto_pwhash_ALG_DEFAULT);
-
-        memset(nonce, 0, sizeof(nonce));
-        crypto_secretbox_easy(ciphertext, B->Buf, B->Length, nonce, key);
-        free(B->Buf);
-        B->Length = B->Length + crypto_secretbox_MACBYTES;
-        B->Buf = malloc(B->Length);
-        B->Buf = memcpy(B->Buf, ciphertext, B->Length);
-    }
-    return;
-}
-
-unsigned char* get_salt(){
-    return 0;
-}*/
+#define HEADER_LEN 16
 
 unsigned int get_len(){
     FILE *fp;
@@ -70,10 +37,10 @@ void get_nonce(unsigned char *ptr){
     fclose(fp);
 }
 
-void output_file(unsigned char *ptr, int message_len){
+void output_file(unsigned char *ptr, unsigned int len){
     FILE *fp;
     fp = fopen("test.out", "w");
-    fwrite(ptr, 1, message_len, fp);
+    fwrite(ptr, 1, len, fp);
     fclose(fp);
 }
 
@@ -99,52 +66,47 @@ void print_hex(unsigned char *ptr, unsigned int len) {
 }
 
 void decrypt_buffer(char* game_name, unsigned char *key_data){
-    //unsigned char salt[]; get_salt();
-    unsigned char key[crypto_secretbox_KEYBYTES];
-    unsigned char nonce[crypto_secretbox_NONCEBYTES];
-    long long unsigned int len;
-    len = get_len();
-    long long unsigned int verified_len = len - crypto_sign_BYTES;
-    unsigned int message_len = verified_len - crypto_secretbox_MACBYTES;
-    unsigned char unverified[len];
-    unsigned char ciphertext[verified_len];
-    unsigned char pk[crypto_sign_PUBLICKEYBYTES];
+    unsigned char game_key[crypto_secretbox_KEYBYTES];
+    unsigned char game_nonce[crypto_secretbox_NONCEBYTES];
+    // This is the len of the entire file, signed.
+    long long unsigned int file_len;
+    file_len = get_len();
+    // This is the len of the entire file, not signed. 
+    long long unsigned int unsigned_file_len = file_len - crypto_sign_BYTES;
+    // The is the unencrypted message length
+    unsigned int unencrypted_file_len = unsigned_file_len - crypto_secretbox_MACBYTES - HEADER_LEN;
+    unsigned char signed_file[file_len];
+    unsigned char encrypted_game[unsigned_file_len];
+    unsigned char file_pk[crypto_sign_PUBLICKEYBYTES];
     int i;
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
         exit(255);
     } else {
-        memset(key, 0, sizeof(key));
-        memset(nonce, 0, sizeof(nonce));
-		memset(ciphertext, 0, sizeof(ciphertext));
-        memset(pk, 0, sizeof(pk));
+        //memset(game_key, 0, sizeof(game_key));
+        //memset(game_nonce, 0, sizeof(game_nonce));
+		//memset(ciphertext, 0, sizeof(ciphertext));
+        //memset(pk, 0, sizeof(pk));
         // Read in the data from the files
-        get_ciphertext(unverified, len);
-        printf("unverified len: %llu\n", len);
-        printf("unverified: ");
-        print_hex(unverified, len);
-        get_key(key);
-        get_nonce(nonce);
-        get_pk(pk);
+        get_ciphertext(signed_file, file_len);
+        get_key(game_key);
+        get_nonce(game_nonce);
+        get_pk(file_pk);
         if(game_name != 0) {
-            printf("Before check\n");
-            if(crypto_sign_open(ciphertext, &verified_len, unverified, len, pk)==0){
-                printf("v len %llu\n",verified_len);
+            if(crypto_sign_open(encrypted_game, &unsigned_file_len, signed_file, file_len, file_pk)==0){
                 // get header
-                unsigned char header[17];
-                strncpy(header, ciphertext, 16);
-                header[16] = '\0';
+                unsigned char header[HEADER_LEN + 1];
+                strncpy(header, encrypted_game, HEADER_LEN);
+                header[HEADER_LEN] = '\0';
                 printf("%s\n", header);
 
                 // copy cipher text to itself-16
-                for (i = 0; i < verified_len-16; i++){
-                        ciphertext[i] = ciphertext[i+16];
+                for (i = 0; i < unsigned_file_len-HEADER_LEN; i++){
+                        encrypted_game[i] = encrypted_game[i+HEADER_LEN];
                 }
-                ciphertext[i] = '\0';
-                print_hex(ciphertext, verified_len-16);
                 
                 // Pad the cipher text to send to the decrypt function
-                unsigned int padded_len = crypto_secretbox_BOXZEROBYTES + verified_len - 16;
+                unsigned int padded_len = crypto_secretbox_BOXZEROBYTES + unsigned_file_len - HEADER_LEN;
                 unsigned char padded[padded_len];
                 memset(padded, 0, sizeof(padded)); 
                 int j = 0;
@@ -152,13 +114,13 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
                     if (i < crypto_secretbox_BOXZEROBYTES){
                         continue;
                     } else {
-                        padded[i] = ciphertext[j];
+                        padded[i] = encrypted_game[j];
                         j++;
                     }
                 }
                 unsigned char plaintext[padded_len];
                 // perform the decrypt
-                if (crypto_secretbox_open(plaintext, padded, padded_len, nonce, key) == -1){
+                if (crypto_secretbox_open(plaintext, padded, padded_len, game_nonce, game_key) == -1){
                     printf("integrity violation\n");
                     exit(255);
                 } else {
@@ -167,13 +129,13 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
                     // Remove the padding
                     for (i = 0; i < padded_len; i++){
                         msg[i] = plaintext[i + crypto_secretbox_BOXZEROBYTES * 2];
-                        if (i > len){
+                        if (i > unencrypted_file_len){
                             break;
                         }
                     }
 
                     printf("The message is: |%s|\n", msg);
-                    output_file(msg, message_len);
+                    output_file(msg, unencrypted_file_len);
                 }
             }
         } else {

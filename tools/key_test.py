@@ -151,9 +151,9 @@ def generate_keys():
 
     # This is our message to send, it must be a bytestring as SecretBox will
     #   treat it as just a binary blob of data.
-    message = b"The president will be exiting through the lower levels."
-    # f = open('demo_files/2048', 'rb')
-    # message = f.read()
+    # message = b"The president will be exiting through the lower levels."
+    f = open('demo_files/2048', 'rb')
+    message = f.read()
     print(len(message))
     # This is a nonce, it *MUST* only be used once, but it is not considered
     #   secret and can be transmitted or stored alongside the ciphertext. A
@@ -163,8 +163,8 @@ def generate_keys():
     #print(len(nonce))
     #encrypted = box.encrypt(message, nonce)
     cipherText = pysodium.crypto_secretbox(message, nonce, key) 
-    print("cipherText: 0x"+",0x".join("{:02x}".format(ord(c)) for c in cipherText))
-    print(len(cipherText))
+    #print("cipherText: 0x"+",0x".join("{:02x}".format(ord(c)) for c in cipherText))
+    #print(len(cipherText))
     (message, nonce, key)
     #print(len(cipherText))
     # out_file.write(cipherText)
@@ -190,8 +190,8 @@ def sign_game(message, pk_file):
     return signed_encrypted_game, pk
 
 def verify_signature(pk, signed_encrypted): 
-    print("signed_encrypted: 0x"+",0x".join("{:02x}".format(ord(c)) for c in signed_encrypted))
-    print(len(signed_encrypted))
+    #print("signed_encrypted: 0x"+",0x".join("{:02x}".format(ord(c)) for c in signed_encrypted))
+    #print(len(signed_encrypted))
     encrypted = pysodium.crypto_sign_open(signed_encrypted, pk)
     #print("cipherText: 0x"+",0x".join("{:02x}".format(ord(c)) for c in cipherText))
     return encrypted
