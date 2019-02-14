@@ -108,7 +108,7 @@ void gen_userkey(char *key, char* name, char* pin, char* game_name, char* versio
 }
 
 // Returns valud in message
-void decrypt(char* key, char * nonce, char* message, unsigned int len){
+void decrypt(char* key, char * nonce, char* message, unsigned int len, char* ret){
     int plaintext_len = len - crypto_secretbox_MACBYTES;
     int padded_len = len + crypto_secretbox_BOXZEROBYTES;
     unsigned char padded_plaintext[padded_len];
@@ -143,7 +143,7 @@ void decrypt(char* key, char * nonce, char* message, unsigned int len){
         }
 
         printf("The message is: |%s|\n", plaintext);
-        
+        memcpy(ret, plaintext, plaintext_len);
     }
 }
 
@@ -239,6 +239,17 @@ int main(){
     int len;
     len = get_len("key_nonce.out");
     // use that to decrypt game.out
-    decrypt(user_key, user_nonce, gamekey_nonce, len);
+    char unencrypted_gamekey_nonce[crypto_secretbox_KEYBYTES + crypto_secretbox_NONCEBYTES];
+    decrypt(user_key, user_nonce, gamekey_nonce, len, unencrypted_gamekey_nonce);
+    char gamekey[crypto_secretbox_KEYBYTES];
+    char gamenonce[crypto_secretbox_NONCEBYTES];
+    memcpy(gamekey, unencrypted_gamekey_nonce, crypto_secretbox_KEYBYTES);
+    memcpy(gamenonce, unencrypted_gamekey_nonce + crypto_secretbox_KEYBYTES, crypto_secretbox_NONCEBYTES);
+    len = get_len("game.out");
+    char ciphertext[len];
+    read_from_file(ciphertext, "game.out", len);
+    char message[len - crypto_secretbox_MACBYTES];
+    decrypt(gamekey, gamenonce, ciphertext, len, message);
+    printf("The message is %s\n", message);
     //decrypt_buffer("game.out", "temp_key_data");
 }
