@@ -141,7 +141,7 @@ def read_factory_secrets(f):
     # print(array)
     return array, key
 
-def generate_keys():
+def generate_and_encrypt():
     # This must be kept secret, this is the combination to your safe
     #key = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
     key = pysodium.randombytes(pysodium.crypto_secretbox_KEYBYTES)
@@ -182,7 +182,7 @@ def encrypt_game_key(user_key, game_key, game_nonce):
  #print(encrypted_gamekey_nonce)
     return encrypted_gamekey_nonce, nonce
 
-def use_key(key, nonce, cipherText):
+def decrypt(key, nonce, cipherText):
 
     #box = nacl.secret.SecretBox(key)
     #cipherText = file.read()
@@ -233,42 +233,57 @@ if __name__ == "__main__":
     salt_file = open("salt.out", 'wb')
     salt_file.write(salt)
     salt_file.close()
+
+
+
     out_file = open('game.out', 'wb')
     key_file = open('key.out', 'wb')
     nonce_file = open('nonce.out', 'wb')
     pk_file = open('pk.out','wb')
-    ciphertext, game_key, game_nonce = generate_keys()
+    key_nonce = open('key_nonce.out','wb')
+    user_nonce_file = open('user_nonce.out', 'wb')
+    dgamekey = open('dgamekey.out', 'wb')
+    dnonce = open('dnonce.out', 'wb')
+
+
+    ciphertext, game_key, game_nonce = generate_and_encrypt()
+
+
     #signed_encrypted, pk = sign_game(ciphertext, pk_file)
     #out_file.write(signed_encrypted)
     out_file.write(ciphertext)
     key_file.write(game_key)
     nonce_file.write(game_nonce)
-    out_file.close()
-    key_file.close()
-    nonce_file.close()
-    pk_file.close()
+
     # cipherText = open('game.out', 'rb').read()
     # key = open('key.out', 'rb').read()
     # nonce = open('nonce.out', 'rb').read()
     encoded_gamekey_nonce, user_nonce  = encrypt_game_key(user_key, game_key, game_nonce)
-    key_nonce = open('key_nonce.out','wb')
+    
     key_nonce.write(encoded_gamekey_nonce)
-    key_nonce.close()
-    user_nonce_file = open('user_nonce.out', 'wb')
+    
+    
     user_nonce_file.write(user_nonce)
     user_nonce_file.close()
-    derived_gamekey_nonce = use_key(user_key, user_nonce, encoded_gamekey_nonce)
+    derived_gamekey_nonce = decrypt(user_key, user_nonce, encoded_gamekey_nonce)
     print(derived_gamekey_nonce)
     derived_gamekey = derived_gamekey_nonce[:32]
     derived_nonce = derived_gamekey_nonce[32:]
-    dgamekey = open('dgamekey.out', 'wb')
+    
     dgamekey.write(derived_gamekey)
-    dgamekey.close()
-    dnonce = open('dnonce.out', 'wb')
     dnonce.write(derived_nonce)
-    dnonce.close()
-    message = use_key(derived_gamekey, derived_nonce, ciphertext)
+    
+    message = decrypt(derived_gamekey, derived_nonce, ciphertext)
+    
     print(message)
+
+    out_file.close()
+    key_file.close()
+    nonce_file.close()
+    pk_file.close()
+    dnonce.close()
+    dgamekey.close()
+    key_nonce.close()
     #cipherText = verify_signature(pk, signed_encrypted)
     #print(cipherText[:16])
     #use_key(key, nonce, cipherText)
