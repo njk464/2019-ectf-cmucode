@@ -234,7 +234,9 @@ if __name__ == "__main__":
     pk_file = open('pk.out','wb')
     user_nonce_file = open('user_nonce.out', 'wb')
 
-    message = b"The president will be exiting through the lower levels."
+    f = open('demo_files/2048', 'rb')
+    message = f.read()
+    #message = b"The president will be exiting through the lower levels."
     ciphertext, game_key, game_nonce = generate_and_encrypt(message)
     # given the user key, encrypt the game_key and nonce
     encoded_gamekey_nonce, user_nonce  = encrypt_game_key(user_key, game_key, game_nonce)

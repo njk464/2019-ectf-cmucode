@@ -111,10 +111,15 @@ void gen_userkey(char *key, char* name, char* pin, char* game_name, char* versio
 void decrypt(char* key, char * nonce, char* message, unsigned int len, char* ret){
     int plaintext_len = len - crypto_secretbox_MACBYTES;
     int padded_len = len + crypto_secretbox_BOXZEROBYTES;
-    unsigned char padded_plaintext[padded_len];
-    unsigned char padded_ciphertext[padded_len];
+    //unsigned char padded_plaintext[padded_len];
+    //unsigned char padded_ciphertext[padded_len];
+    unsigned char *padded_plaintext;
+    unsigned char *padded_ciphertext;
+    padded_plaintext = malloc(padded_len);
+    padded_ciphertext = malloc(padded_len);
 
-    memset(padded_ciphertext, 0, padded_len); 
+    memset(padded_ciphertext, 0, padded_len);
+    memset(padded_plaintext, 0, padded_len);
     int j = 0;
     int i;
     for (i = 0; i < padded_len; i++){
@@ -130,7 +135,10 @@ void decrypt(char* key, char * nonce, char* message, unsigned int len, char* ret
         printf("Decrypt Fail\n");
         exit(0);
     } else {
-        unsigned char plaintext[plaintext_len];
+        unsigned char *plaintext;
+        plaintext = malloc(plaintext_len);
+        memset(plaintext, 0, plaintext_len);
+        //unsigned char plaintext[plaintext_len];
         // Move the data to print the string out.
         // Remove the padding
         for (i = 0; i < plaintext_len; i++){
@@ -142,6 +150,9 @@ void decrypt(char* key, char * nonce, char* message, unsigned int len, char* ret
 
         printf("The message is: |%s|\n", plaintext);
         memcpy(ret, plaintext, plaintext_len);
+        free(plaintext);
+        free(padded_plaintext);
+        free(padded_ciphertext);
     }
 }
 
@@ -288,6 +299,10 @@ int main(){
         memcpy(encrypted_game, verified_ciphertext + sizeof(unsigned long long int) + encrypted_header_len, encrypted_game_len);
         decrypt(gamekey, gamenonce, encrypted_game, encrypted_game_len, message);
         printf("The message is %s\n", message);
+        FILE *fp;
+        fp = fopen("out.out", "w");
+        fwrite(message, 1, decrypted_game_len, fp);
+        fclose(fp);
     } else {
     
     }
