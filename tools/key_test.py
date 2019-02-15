@@ -11,7 +11,7 @@ import pickle
 
 #import nacl.utils
 #import nacl.secret
-
+from struct import *
 import pysodium
 import array
 
@@ -141,7 +141,7 @@ def read_factory_secrets(f):
     # print(array)
     return array, key
 
-def generate_and_encrypt():
+def generate_and_encrypt(message):
     # This must be kept secret, this is the combination to your safe
     #key = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
     key = pysodium.randombytes(pysodium.crypto_secretbox_KEYBYTES)
@@ -151,10 +151,9 @@ def generate_and_encrypt():
 
     # This is our message to send, it must be a bytestring as SecretBox will
     #   treat it as just a binary blob of data.
-    message = b"The president will be exiting through the lower levels."
     #f = open('demo_files/2048', 'rb')
     #message = f.read()
-    print(len(message))
+    #print(len(message))
     # This is a nonce, it *MUST* only be used once, but it is not considered
     #   secret and can be transmitted or stored alongside the ciphertext. A
     #   good source of nonces are just sequences of 24 random bytes.
@@ -227,63 +226,46 @@ if __name__ == "__main__":
     # # create_games(f)
     # f.close()
     salt, user_key = gen_userkey("user1", "12345678", "2048", "1.1")
-    #salt_patrol = open("salt.patrol", 'wb')
-    #salt_patrol.write(user_key)
-    #salt_patrol.close()
     salt_file = open("salt.out", 'wb')
     salt_file.write(salt)
     salt_file.close()
 
-
-
     out_file = open('game.out', 'wb')
-    key_file = open('key.out', 'wb')
-    nonce_file = open('nonce.out', 'wb')
     pk_file = open('pk.out','wb')
-    key_nonce = open('key_nonce.out','wb')
     user_nonce_file = open('user_nonce.out', 'wb')
-    dgamekey = open('dgamekey.out', 'wb')
-    dnonce = open('dnonce.out', 'wb')
 
-
-    ciphertext, game_key, game_nonce = generate_and_encrypt()
-
-
-    #signed_encrypted, pk = sign_game(ciphertext, pk_file)
-    #out_file.write(signed_encrypted)
-    out_file.write(ciphertext)
-    key_file.write(game_key)
-    nonce_file.write(game_nonce)
-
-    # cipherText = open('game.out', 'rb').read()
-    # key = open('key.out', 'rb').read()
-    # nonce = open('nonce.out', 'rb').read()
+    message = b"The president will be exiting through the lower levels."
+    ciphertext, game_key, game_nonce = generate_and_encrypt(message)
+    # given the user key, encrypt the game_key and nonce
     encoded_gamekey_nonce, user_nonce  = encrypt_game_key(user_key, game_key, game_nonce)
-    
-    key_nonce.write(encoded_gamekey_nonce)
-    
-    
     user_nonce_file.write(user_nonce)
-    user_nonce_file.close()
+    # pack data as 64 bits
+    encrypted_header_len = pack('Q', len(encoded_gamekey_nonce))
+    print(encrypted_header_len)
+
+    file_buf = encrypted_header_len + encoded_gamekey_nonce + ciphertext
+
+    signed_encrypted, pk = sign_game(file_buf, pk_file)
+    # this is everything
+    out_file.write(signed_encrypted)
+
+    # verify sig for entire file
+    file_buf  = verify_signature(pk, signed_encrypted)
+    # split
+    encrypted_header_len = unpack('Q', file_buf[:8])[0]
+    encoded_gamekey_nonce = file_buf[8:(encrypted_header_len+8)]
+    ciphertext = file_buf[encrypted_header_len+8:]
     derived_gamekey_nonce = decrypt(user_key, user_nonce, encoded_gamekey_nonce)
-    print(derived_gamekey_nonce)
+    #print(derived_gamekey_nonce)
     derived_gamekey = derived_gamekey_nonce[:32]
     derived_nonce = derived_gamekey_nonce[32:]
-    
-    dgamekey.write(derived_gamekey)
-    dnonce.write(derived_nonce)
-    
+
     message = decrypt(derived_gamekey, derived_nonce, ciphertext)
-    
+
     print(message)
 
+    user_nonce_file.close()
     out_file.close()
-    key_file.close()
-    nonce_file.close()
     pk_file.close()
-    dnonce.close()
-    dgamekey.close()
-    key_nonce.close()
-    #cipherText = verify_signature(pk, signed_encrypted)
     #print(cipherText[:16])
     #use_key(key, nonce, cipherText)

@@ -114,7 +114,6 @@ void decrypt(char* key, char * nonce, char* message, unsigned int len, char* ret
     unsigned char padded_plaintext[padded_len];
     unsigned char padded_ciphertext[padded_len];
 
-
     memset(padded_ciphertext, 0, padded_len); 
     int j = 0;
     int i;
@@ -126,7 +125,6 @@ void decrypt(char* key, char * nonce, char* message, unsigned int len, char* ret
             j++;
         }
     }
-
 
     if (crypto_secretbox_open(padded_plaintext, padded_ciphertext, padded_len, nonce, key) == -1){
         printf("Decrypt Fail\n");
@@ -144,6 +142,17 @@ void decrypt(char* key, char * nonce, char* message, unsigned int len, char* ret
 
         printf("The message is: |%s|\n", plaintext);
         memcpy(ret, plaintext, plaintext_len);
+    }
+}
+
+//Assume that len is of signed_data
+int verify_signed(unsigned char* signed_data, unsigned char* verified, unsigned long long int len, unsigned char* pk){
+    unsigned long long int  verified_len = len - crypto_sign_BYTES;
+    if(crypto_sign_open(verified, &verified_len, signed_data, len, pk) == 0){
+        return 0;
+    }else{
+        printf("Signing Error\n");
+        return -1;
     }
 }
 
@@ -228,28 +237,59 @@ void decrypt_buffer(char* game_name, unsigned char *key_data){
 }
 
 int main(){
+
+    if (sodium_init() < 0) {
+        printf("Error in Crypto Library\n");
+        exit(0);
+    }
     char user_key[32];
     gen_userkey(user_key,"user1", "12345678", "2048", "1.1");
     // read user nonce.
     char user_nonce[crypto_secretbox_NONCEBYTES];
     read_from_file(user_nonce, "user_nonce.out", crypto_secretbox_NONCEBYTES);
     // gamekey_nonce
-    char gamekey_nonce[crypto_secretbox_KEYBYTES + crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES];
-    read_from_file(gamekey_nonce, "key_nonce.out", crypto_secretbox_KEYBYTES + crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES);
-    int len;
+    /*char gamekey_nonce[crypto_secretbox_KEYBYTES + crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES];
+    read_from_file(gamekey_nonce, "key_nonce.out", crypto_secretbox_KEYBYTES + crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES);*/
+    char pk[crypto_sign_PUBLICKEYBYTES];
+    read_from_file(pk, "pk.out", crypto_sign_PUBLICKEYBYTES);
+    /*int len;
     len = get_len("key_nonce.out");
     // use that to decrypt game.out
     char unencrypted_gamekey_nonce[crypto_secretbox_KEYBYTES + crypto_secretbox_NONCEBYTES];
-    decrypt(user_key, user_nonce, gamekey_nonce, len, unencrypted_gamekey_nonce);
-    char gamekey[crypto_secretbox_KEYBYTES];
-    char gamenonce[crypto_secretbox_NONCEBYTES];
-    memcpy(gamekey, unencrypted_gamekey_nonce, crypto_secretbox_KEYBYTES);
-    memcpy(gamenonce, unencrypted_gamekey_nonce + crypto_secretbox_KEYBYTES, crypto_secretbox_NONCEBYTES);
-    len = get_len("game.out");
-    char ciphertext[len];
-    read_from_file(ciphertext, "game.out", len);
-    char message[len - crypto_secretbox_MACBYTES];
-    decrypt(gamekey, gamenonce, ciphertext, len, message);
-    printf("The message is %s\n", message);
+    decrypt(user_key, user_nonce, gamekey_nonce, len, unencrypted_gamekey_nonce);*/
+    /* main starts here*/
+    unsigned long long int unverified_len = get_len("game.out");
+    char signed_ciphertext[unverified_len];
+    read_from_file(signed_ciphertext, "game.out", unverified_len);
+    
+    unsigned long long int verified_len = unverified_len -  crypto_sign_BYTES;
+    char verified_ciphertext[verified_len];
+    if(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, pk) == 0){    
+        unsigned long long int encrypted_header_len; //length at beginning of file
+        // TODO: verify that ull is the same size on Arty Z7
+        memcpy(&encrypted_header_len, verified_ciphertext, sizeof(unsigned long long int));
+        unsigned long long int decrypted_header_len = encrypted_header_len - crypto_secretbox_MACBYTES;
+        unsigned long long int encrypted_game_len = verified_len - encrypted_header_len - sizeof(unsigned long long int);
+        unsigned long long int decrypted_game_len = encrypted_game_len - crypto_secretbox_MACBYTES;
+        // split header and game
+        char encrypted_header[encrypted_header_len];
+        memcpy(encrypted_header, verified_ciphertext + sizeof(unsigned long long int), encrypted_header_len);
+        // decrypt header to get gamekey/nonce
+        char gamekey_nonce[decrypted_header_len];
+        decrypt(user_key, user_nonce, encrypted_header, encrypted_header_len, gamekey_nonce);
+        char gamekey[crypto_secretbox_KEYBYTES];
+        char gamenonce[crypto_secretbox_NONCEBYTES];
+        memcpy(gamekey, gamekey_nonce, crypto_secretbox_KEYBYTES);
+        memcpy(gamenonce, gamekey_nonce + crypto_secretbox_KEYBYTES, crypto_secretbox_NONCEBYTES);
+    
+        // decrypt game
+        char message[decrypted_game_len];
+        char encrypted_game[encrypted_game_len];
+        memcpy(encrypted_game, verified_ciphertext + sizeof(unsigned long long int) + encrypted_header_len, encrypted_game_len);
+        decrypt(gamekey, gamenonce, encrypted_game, encrypted_game_len, message);
+        printf("The message is %s\n", message);
+    } else {
+    
+    }
     //decrypt_buffer("game.out", "temp_key_data");
 }
