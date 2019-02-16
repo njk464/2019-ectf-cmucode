@@ -18,6 +18,9 @@
 #define MESH_TABLE_INSTALLED 0x01
 #define MESH_TABLE_END 0xff
 
+#define MAX_LOGIN_ATTEMPTS 5
+#define LOGIN_TIMEOUT 10000 // 30-milliseconds
+
 // To erase (or call update) on flash, it needs to be done
 // on boundaries of size 64K
 #define FLASH_PAGE_SIZE 65536

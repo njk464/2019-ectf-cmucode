@@ -561,6 +561,7 @@ void mesh_loop(void) {
     char *line;
     char **args;
     int status = 1;
+    int login_count = 0;
 
     memset(user.name, 0, MAX_STR_LEN);
     memset(user.pin, 0, MAX_STR_LEN);
@@ -596,8 +597,14 @@ void mesh_loop(void) {
 
     while(1)
     {
-        if (mesh_login(&user))
+        if (mesh_login(&user)) {
+            if (++login_count >= MAX_LOGIN_ATTEMPTS) {
+                login_count = 0;
+                printf("Exceeded maximum login limit. Please try again in 30-seconds ... \n");
+                mdelay(LOGIN_TIMEOUT); 
+            }
             continue;
+        }
 
         while(*(user.name)) {
             line = mesh_input(CONFIG_SYS_PROMPT);
