@@ -8,6 +8,7 @@
 #define MAX_PIN_LENGTH 8
 #define MAX_GAME_LENGTH 31
 #define MAX_NUM_USERS 5
+#define MAX_GAMES 128
 
 #define MESH_SENTINEL_LOCATION 0x00000040
 #define MESH_SENTINEL_VALUE 0x12345678
@@ -18,8 +19,9 @@
 #define MESH_TABLE_INSTALLED 0x01
 #define MESH_TABLE_END 0xff
 
-#define MAX_LOGIN_ATTEMPTS 5
-#define LOGIN_TIMEOUT 10000 // 30-milliseconds
+#define MAX_LOGIN_ATTEMPTS 2
+#define LOGIN_TIMEOUT 5000 // 5-seconds
+#define MAX_GAMES_INSTALLED MAX_GAMES*MAX_NUM_USERS
 
 // To erase (or call update) on flash, it needs to be done
 // on boundaries of size 64K
@@ -67,6 +69,7 @@ char* mesh_input(char* prompt);
 int mesh_valid_install(char *game_name);
 void ptr_to_string(void* ptr, char* buf);
 void full_name_from_short_name(char* full_name, struct games_tbl_row* row);
+void mesh_get_install_table();
 
 /*
     Ext 4 functions
