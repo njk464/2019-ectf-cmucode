@@ -14,6 +14,8 @@ import pickle
 from struct import *
 import pysodium
 import array
+import base64
+
 
 def write_factory_secrets(f, h):
     """Write any factory secrets. The reference implementation has none
@@ -146,7 +148,7 @@ def generate_and_encrypt(message):
     #key = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
     key = pysodium.randombytes(pysodium.crypto_secretbox_KEYBYTES)
     #print(len(key))
-    # This is your safe, you can use it to encrypt or decrypt messages
+    # Th`/gis is your safe, you can use it to encrypt or decrypt messages
     #box = nacl.secret.SecretBox(key)
 
     # This is our message to send, it must be a bytestring as SecretBox will
@@ -170,6 +172,11 @@ def generate_and_encrypt(message):
 
     return cipherText, key, nonce
 
+def gen_key_nonce():
+    key = pysodium.randombytes(pysodium.crypto_secretbox_KEYBYTES)
+    nonce = pysodium.randombytes(pysodium.crypto_secretbox_NONCEBYTES)
+    return (key, nonce)
+
 def encrypt_game_key(user_key, game_key, game_nonce):
     #print(game_key)
     #print(game_nonce)
@@ -182,16 +189,12 @@ def encrypt_game_key(user_key, game_key, game_nonce):
     return encrypted_gamekey_nonce, nonce
 
 def decrypt(key, nonce, cipherText):
-
-    #box = nacl.secret.SecretBox(key)
-    #cipherText = file.read()
-    #plaintext = box.decrypt(encrypted, nonce)
-    #print("cipherText: 0x"+",0x".join("{:02x}".format(ord(c)) for c in cipherText))
-    #print("nonce: 0x"+",0x".join("{:02x}".format(ord(c)) for c in nonce))
-    #print("key: 0x"+",0x".join("{:02x}".format(ord(c)) for c in key))
     plaintext = pysodium.crypto_secretbox_open(cipherText, nonce, key)
-    # print("The message is: " + str(plaintext))
     return plaintext
+
+def encrypt(key, nonce, message):
+    cipherText = pysodium.crypto_secretbox(message, nonce, key) 
+    return cipherText
 
 def sign_game(message, pk_file):
     pk, sk = pysodium.crypto_sign_keypair()
@@ -207,32 +210,74 @@ def verify_signature(pk, signed_encrypted):
     #print("cipherText: 0x"+",0x".join("{:02x}".format(ord(c)) for c in cipherText))
     return encrypted
 
-def gen_userkey(user, pin, game_name, version):
+def gen_userkey(user, pin, salt, game_name, version):
     password = str(user) + str(pin) + str(game_name) + str(version)
-    salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
+    #salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
     key = pysodium.crypto_pwhash(32, password, salt, pysodium.crypto_pwhash_OPSLIMIT_MIN, pysodium.crypto_pwhash_MEMLIMIT_MIN, 2)
-    print(key)
-    return salt, key
+    #print(key)
+    return key
 
-def encrypt_header(name, version, users):
-    # add data to header
-    encrypt_gamekey(gamekey, users)
-
-    # data + encryptegamekey
-    encrypt_header_block(data, encryptedgame)
-
+def encrypt_header(users, game, gamekey, gamenonce, key, nonce):
+    #print(game)
+    name = game[1]
+    version = game[2]
+    game_users = game[3]
+    out_name = name + "-v" + version
+    header = bytes("version:%s\n" % (version), "utf-8")
+    header += bytes("name:%s\n" % (name), "utf-8")
+    for user in game[3]:
+        # find the user data
+        found = False
+        for user_data in users:
+            if user == user_data[0]:
+                found = True
+                break
+        if found:
+            print(user_data)
+            username = user_data[0]
+            user_pin = user_data[1]
+            user_salt = base64.b64decode(user_data[2])
+            print(user_salt)
+            user_key = gen_userkey(username, user_pin, user_salt, name, version)
+            encrypted_gamekey, nonce = encrypt_game_key(user_key, gamekey, gamenonce)
+            b64_encoded_gamekey = base64.b64encode(encrypted_gamekey)
+            b64_encoded_nonce = base64.b64encode(nonce)
+            header += bytes("users:%s %s %s\n" % (user, b64_encoded_gamekey, b64_encoded_nonce), "utf-8")
+    #print("Header")
+    #print(header)
+    encrypted_header = encrypt(key, nonce, header)
     # append len 
+    header_len = len(encrypted_header)
+    return out_name, header_len, encrypted_header
 
-    return encrypted_header
+def gen_keypair():
+    pk, sk = pysodium.crypto_sign_keypair()
+    return pk, sk
 
-def encrypt_game(path, gamekey):
+# Encrypt the game binary
+def encrypt_game(game, gamekey, gamenonce):
+    gamepath = game[0]
+    gamebin = open(gamepath, 'rb').read();
+    encrypted_game = pysodium.crypto_secretbox(gamebin, gamenonce, gamekey)
     return encrypted_game
 
-def encrypt_file(users, games):
-    #gamekey = gen_gamekey()
-    #encrypt_header()
-    #encrypt_game()
-    return
+# everything is getting signed with the same public key, right?
+def sign(message, sk):
+    signed_message = pysodium.crypto_sign(message, sk)
+    return signed_message
+
+# PK is a standard secret. 
+# So is the user nonce???
+# For now, hardcode the user nonce. 
+def encrypt_sign_file(users, game, pk, key, nonce):
+    (gamekey, gamenonce) = gen_key_nonce()
+    (out_name, encrypted_header_len, encrypted_header) = encrypt_header(users, game, gamekey, gamenonce, key, nonce)
+    encrypted_game = encrypt_game(game, gamekey, gamenonce)
+    header_game = str(encrypted_header_len) + str(encrypted_header) + str(encrypted_game)
+    signed_file = sign(header_game, sk)
+    fp = open(out_name,'wb');
+    fp.write(signed_file)
+    fp.close()
 
 # validates the user input, and splits the data into a triple
 def validate_users(lines):
@@ -299,10 +344,22 @@ if __name__ == "__main__":
     for user in users:
         header = bytes("users:%s\n" % (user), "utf-8")
     '''
+    pk_file = open('pk.out', 'wb')
+    pk, sk = gen_keypair()
+    pk_file.write(pk)
+    pk_file.close()
+
+    key_file = open('key.out', 'rb')
+    key = key_file.read()
+    key_file.close()
+    nonce_file = open('nonce.out', 'rb')
+    nonce = nonce_file.read()
+    nonce_file.close()
+
     users = read_users('demo_files/demo_users_salt.txt')
-    game_lines = read_games('demo_files/demo_games.txt')
+    game_lines = read_games('demo_files/demo_games_test.txt')
     for game in game_lines:
-        encrypt_file(users, game)
+        encrypt_sign_file(users, game, sk, key, nonce)
     '''
     salt, user_key = gen_userkey("user1", "12345678", "2048", "1.1")
     salt_file = open("salt.out", 'wb')
