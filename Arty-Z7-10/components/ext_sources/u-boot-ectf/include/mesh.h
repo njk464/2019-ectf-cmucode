@@ -20,7 +20,7 @@
 #define MESH_TABLE_END 0xff
 
 #define MAX_LOGIN_ATTEMPTS 2
-#define LOGIN_TIMEOUT 5000 // 5-seconds
+#define LOGIN_TIMEOUT 1000 // 5-seconds
 #define MAX_GAMES_INSTALLED MAX_GAMES*MAX_NUM_USERS
 
 // To erase (or call update) on flash, it needs to be done

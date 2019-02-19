@@ -54,11 +54,12 @@ def write_mesh_users_h(users, f):
 #ifndef __MESH_USERS_H__
 #define __MESH_USERS_H__
 
+#include <mesh.h>
+
 #define NUM_MESH_USERS {num_users}
 
 struct MeshUser {{
-    char username[16];
-    char pin[9];
+    char username[MAX_USERNAME_LENGTH + 1];
     char hash[61];
 }};
 
@@ -70,10 +71,12 @@ static struct MeshUser mesh_users[] = {{
         f.write(data)
 
     f.write("""
-};
+}};
+
+static char* default_hash = "{}";
 
 #endif /* __MESH_USERS_H__ */
-""")
+""".format(users[len(users)-1][1]))
 
 
 def write_mesh_default_h(default_txt_path, header_path):

@@ -1233,9 +1233,16 @@ int mesh_validate_user(User *user)
         if (strcmp(mesh_users[i].username, user->name) == 0 &&
             bcrypt_checkpass(user->pin, mesh_users[i].hash) == 0)
         {
-            return 0;
+            if (bcrypt_checkpass(user->pin, mesh_users[i].hash) == 0) {
+                return 0;
+            }
+            else {
+                return 1;
+            }
         }
     }
+    // run bcrypt even if no 
+    bcrypt_checkpass(user->pin, default_hash);
     return 1;
 }
 
