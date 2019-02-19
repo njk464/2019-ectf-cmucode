@@ -214,6 +214,61 @@ def gen_userkey(user, pin, game_name, version):
     print(key)
     return salt, key
 
+def encrypt_header(name, version, users):
+    # add data to header
+    encrypt_gamekey(gamekey, users)
+
+    # data + encryptegamekey
+    encrypt_header_block(data, encryptedgame)
+
+    # append len 
+
+    return encrypted_header
+
+def encrypt_game(path, gamekey):
+    return encrypted_game
+
+def encrypt_file(users, games):
+    #gamekey = gen_gamekey()
+    #encrypt_header()
+    #encrypt_game()
+    return
+
+# validates the user input, and splits the data into a triple
+def validate_users(lines):
+    reg = r'^\s*(\w+)\s+(\d{8})\s+([A-Za-z0-9\+\/=]{24})\s*$'
+    users = [(m.group(1), m.group(2), m.group(3)) for line in lines
+                for m in [re.match(reg, line)] if m]
+    return users
+
+# returns the lines from the users file
+def read_users(users_file):
+    mesh_users_in = open(users_file, "r")
+    lines = [line.rstrip('\n') for line in mesh_users_in]
+    users = validate_users(lines)
+    return users
+
+def read_games(game_desc_file):
+    try:
+        f_games = open(game_desc_file, "r")
+    except Exception as e:
+        print("Game desc file failed to open")
+        exit(2)
+
+    reg = r'^\s*([\w\/\-.\_]+)\s+([\w\-.\_]+)\s+(\d+\.\d+|\d+)((?:\s+\w+)+)'
+
+    games = []
+    for line in f_games:
+        m = re.match(reg, line)
+        g_path = m.group(1)
+        name = m.group(2)
+        version = m.group(3)
+        users = m.group(4).split()
+
+        games.append([g_path, name, version, users])
+
+    return games
+
 if __name__ == "__main__":
     # f = open("factorySecrets.txt", "w")
     # h = open("secret.h", "w")
@@ -223,8 +278,32 @@ if __name__ == "__main__":
     # f.close()
     # f = open("factorySecrets.txt", "r")
     # array, key = read_factory_secrets(f)
-    # # create_games(f)
+    # reate_games(f)
     # f.close()
+
+    # read in data from files
+    # user pin salt
+    # game who_can_play_them
+
+    # for each game
+    #   generate game key
+    #       create header with meta data and encrypted game keys
+    #       encrypt header
+    #   encrypt game
+    #   append header+game
+    #   sign header+game
+    #   spit out signed file. 
+    '''
+    header = bytes("version:%s\n" % (version), "utf-8")
+    header += bytes("name:%s\n" % (name), "utf-8")
+    for user in users:
+        header = bytes("users:%s\n" % (user), "utf-8")
+    '''
+    users = read_users('demo_files/demo_users_salt.txt')
+    game_lines = read_games('demo_files/demo_games.txt')
+    for game in game_lines:
+        encrypt_file(users, game)
+    '''
     salt, user_key = gen_userkey("user1", "12345678", "2048", "1.1")
     salt_file = open("salt.out", 'wb')
     salt_file.write(salt)
@@ -271,3 +350,4 @@ if __name__ == "__main__":
     pk_file.close()
     #print(cipherText[:16])
     #use_key(key, nonce, cipherText)
+    '''
