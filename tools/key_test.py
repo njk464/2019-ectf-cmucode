@@ -346,7 +346,7 @@ if __name__ == "__main__":
     key = key_file.read()
     user = "user1"
     pin = "12345678"
-    salt = base64.b64encode(b'waUNqGdgxntpJBfyXFIO/w==')
+    salt = base64.b64decode(b'waUNqGdgxntpJBfyXFIO/w==')
     game_file.close()
     pk_file.close()
     nonce_file.close()
@@ -393,7 +393,32 @@ if __name__ == "__main__":
     
     ciphertext = file_buf[encrypted_header_len+8:]
     header = decrypt(key, nonce, encrypted_header)
+    header = header.decode('utf-8')
     print(header)
+    header_data = header.splitlines()
+    version = header_data[0]
+    name = header_data[1]
+    user = header_data[2].split()
+    user_name = user[0][6:]
+    print(user_name)
+    enc_game_key_nonce = base64.b64decode(user[1][1:])
+    print("Gamekeynonce: " + str(enc_game_key_nonce))
+    user_nonce = base64.b64decode(user[2][1:])    
+    print("user_nonce: " + str(user_nonce))
+    userkey = gen_userkey(user_name, pin, salt, "2048", "1.0")
+    game_key_nonce = decrypt(userkey, user_nonce, enc_game_key_nonce)
+    print(game_key_nonce)
+    game_key = game_key_nonce[:32]
+    game_nonce = game_key_nonce[32:]
+    print(game_key)
+    print(game_nonce)
+    print(len(game_key))
+    print(len(game_nonce))
+    decrypted_game = decrypt(game_key, game_nonce, ciphertext)
+    f = open("out.out", 'wb')
+    f.write(decrypted_game)
+    f.close()
+
     '''
     derived_gamekey_nonce = decrypt(user_key, user_nonce, encoded_gamekey_nonce)
     #print(derived_gamekey_nonce)
