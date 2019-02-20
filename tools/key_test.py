@@ -8,13 +8,9 @@ import base64
 import os
 import re
 import pickle
-
-#import nacl.utils
-#import nacl.secret
 from struct import *
 import pysodium
 import array
-import base64
 
 
 def write_factory_secrets(f, h):
@@ -72,20 +68,6 @@ def open_users(path):
     lines = [line.rstrip('\n') for line in f_mesh_users_in]
     users = validate_users(lines)
     return users
-
-def validate_users(lines):
-    """Validate that the users data is formatted properly and return a list
-    of tuples of users and pins.
-    TODO: Check this regular expression
-    lines: list of strings from a users.txt file with newlines removed
-    """
-    # Regular expression to ensure that there is a username and an 8 digit pin
-    reg = r'^\s*(\w+)\s+(\d{8})\s*$'
-    lines = [(m.group(1), m.group(2)) for line in lines
-             for m in [re.match(reg, line)] if m]
-
-    # return a list of tuples of (username, pin)
-    return lines
 
 def create_factory_secrets(users, f, h):
     """Write any factory secrets. The reference implementation has none
@@ -413,6 +395,7 @@ if __name__ == "__main__":
     file_buf = verify_signature(game, pk)
     # split
     encrypted_header_len = unpack('Q', file_buf[:8])[0]
+    print("Encrypted Header Len: " + str(encrypted_header_len))
     # decrypt header
 
     encrypted_header = file_buf[8:(encrypted_header_len+8)]
