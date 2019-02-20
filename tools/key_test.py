@@ -410,7 +410,7 @@ if __name__ == "__main__":
     out_file.write(signed_encrypted)
     '''
     # verify sig for entire file
-    file_buf = verify_signature(pk, game)
+    file_buf = verify_signature(game, pk)
     # split
     encrypted_header_len = unpack('Q', file_buf[:8])[0]
     # decrypt header
