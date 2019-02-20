@@ -215,11 +215,9 @@ def encrypt_header(users, game, gamekey, gamenonce, key, nonce):
                 found = True
                 break
         if found:
-            print(user_data)
             username = user_data[0]
             user_pin = user_data[1]
             user_salt = base64.b64decode(user_data[2])
-            print(user_salt)
             user_key = gen_userkey(username, user_pin, user_salt, name, version)
             encrypted_gamekey, nonce = encrypt_game_key(user_key, gamekey, gamenonce)
             b64_encoded_gamekey = base64.b64encode(encrypted_gamekey)
@@ -229,7 +227,9 @@ def encrypt_header(users, game, gamekey, gamenonce, key, nonce):
     #print(header)
     encrypted_header = encrypt(key, nonce, header)
     # append len 
+    print(len(encrypted_header))
     header_len = pack('Q', len(encrypted_header))
+    print(unpack('Q', header_len))
     encrypted_header = header_len + encrypted_header
     return out_name, encrypted_header
 
@@ -256,9 +256,8 @@ def encrypt_sign_file(users, game, sk, key, nonce, pk):
     (gamekey, gamenonce) = gen_key_nonce()
     (out_name, encrypted_header) = encrypt_header(users, game, gamekey, gamenonce, key, nonce)
     encrypted_game = encrypt_game(game, gamekey, gamenonce)
-    header_game = str(encrypted_header) + str(encrypted_game)
+    header_game = encrypted_header + encrypted_game
     signed_file = sign(header_game, sk)
-    print(len(sk))
     header_game = verify_signature(signed_file, pk)
     fp = open(out_name,'wb');
     fp.write(signed_file)
@@ -325,9 +324,6 @@ if __name__ == "__main__":
     #   spit out signed file. 
     pk_file = open('pk.out', 'wb')
     pk, sk = gen_keypair()
-    print(len(pk))
-    print(len(sk))
-    print(pysodium.crypto_sign_PUBLICKEYBYTES)
     pk_file.write(pk)
     pk_file.close()
 
@@ -395,6 +391,7 @@ if __name__ == "__main__":
     file_buf = verify_signature(game, pk)
     # split
     encrypted_header_len = unpack('Q', file_buf[:8])[0]
+    print(file_buf[:8])
     print("Encrypted Header Len: " + str(encrypted_header_len))
     # decrypt header
 
