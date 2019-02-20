@@ -219,17 +219,13 @@ def encrypt_header(users, game, gamekey, gamenonce, key, nonce):
             user_pin = user_data[1]
             user_salt = base64.b64decode(user_data[2])
             user_key = gen_userkey(username, user_pin, user_salt, name, version)
-            encrypted_gamekey, nonce = encrypt_game_key(user_key, gamekey, gamenonce)
+            encrypted_gamekey, game_nonce = encrypt_game_key(user_key, gamekey, gamenonce)
             b64_encoded_gamekey = base64.b64encode(encrypted_gamekey)
-            b64_encoded_nonce = base64.b64encode(nonce)
+            b64_encoded_nonce = base64.b64encode(game_nonce)
             header += bytes("users:%s %s %s\n" % (user, b64_encoded_gamekey, b64_encoded_nonce), "utf-8")
-    #print("Header")
-    #print(header)
     encrypted_header = encrypt(key, nonce, header)
     # append len 
-    print(len(encrypted_header))
     header_len = pack('Q', len(encrypted_header))
-    print(unpack('Q', header_len))
     encrypted_header = header_len + encrypted_header
     return out_name, encrypted_header
 
@@ -240,7 +236,7 @@ def gen_keypair():
 # Encrypt the game binary
 def encrypt_game(game, gamekey, gamenonce):
     gamepath = game[0]
-    gamebin = open(gamepath, 'rb').read();
+    gamebin = open(gamepath, 'rb').read()
     encrypted_game = pysodium.crypto_secretbox(gamebin, gamenonce, gamekey)
     return encrypted_game
 
@@ -391,11 +387,10 @@ if __name__ == "__main__":
     file_buf = verify_signature(game, pk)
     # split
     encrypted_header_len = unpack('Q', file_buf[:8])[0]
-    print(file_buf[:8])
-    print("Encrypted Header Len: " + str(encrypted_header_len))
     # decrypt header
 
     encrypted_header = file_buf[8:(encrypted_header_len+8)]
+    
     ciphertext = file_buf[encrypted_header_len+8:]
     header = decrypt(key, nonce, encrypted_header)
     print(header)
