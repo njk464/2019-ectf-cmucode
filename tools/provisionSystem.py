@@ -5,6 +5,7 @@ import subprocess
 import re
 import argparse
 import base64
+import pysodium
 
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
@@ -24,6 +25,14 @@ factory_secrets_fn = "FactorySecrets.txt"
 # Path to secrets header file
 secret_header_fn = os.environ["ECTF_UBOOT"] + "/include/secret.h"
 
+def gen_key_nonce():
+    key = pysodium.randombytes(pysodium.crypto_secretbox_KEYBYTES)
+    nonce = pysodium.randombytes(pysodium.crypto_secretbox_NONCEBYTES)
+    return (key, nonce)
+
+def gen_keypair():
+    pk, sk = pysodium.crypto_sign_keypair()
+    return pk, sk
 
 def validate_users(lines):
     """Validate that the users data is formatted properly and return a list
@@ -167,26 +176,17 @@ def write_factory_secrets(users, f, h):
     f: open file to write the factory secrets to
     h: open file to write data to pass along to shell
     """
-    for user in users:
-        f.write(user[0] + ' ' + user[1] + ' salt\n')
-    # f.write("This is totes a key again\n")
 
-    sign_key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-        backend=default_backend()
-        )
-    sign_key_priv = sign_key.private_bytes(
-        encoding=serialization.Encoding.PEM, 
-        format=serialization.PrivateFormat.PKCS8, 
-        encryption_algorithm=serialization.NoEncryption()
-        )
-    public_key = sign_key.public_key()
-    sign_key_pub = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM, 
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-    f.write(base64.b64encode(sign_key_priv).decode('utf-8'))
+    salt_array = []
+    for user in users:
+        salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
+        f.write(user[0] + ' ' + user[1] + ' ' + salt + '\n')
+        salt_array.append([user[0], salt])
+    header_key, header_nonce = gen_key_nonce()
+    pk, sk = gen_keypair()
+    f.write(header_key)
+    f.write(header_nonce)
+    f.write(sk)
 
     s = """
 /*
@@ -199,11 +199,18 @@ def write_factory_secrets(users, f, h):
 #define __SECRET_H__
 
 static char* sign_public_key = \""""
-    s += base64.b64encode(sign_key_pub).decode('utf-8')
-    s += """\" ;
-
+    s += base64.b64encode(pk).decode('utf-8')
+    s += """\" ;\nstatic char* header_key = \""""
+    s += base64.b64encode(header_key).decode('utf-8')
+    s += "\";\nstatic char* header_nonce = \""
+    s += base64.b64encode(header_nonce).decode('utf-8')
+    s += "\";\n"
+    for entry in salt_array:
+        s += "static char* " + entry[0] + "_salt = \"" + base64.b64encode(entry[1]).decode('utf-8') + "\";\n"
+    s += """
 #endif /* __SECRET_H__ */
 """
+
     h.write(s)
 
 def main():
