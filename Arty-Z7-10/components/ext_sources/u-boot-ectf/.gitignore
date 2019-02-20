@@ -88,3 +88,7 @@ GTAGS
 *.orig
 *~
 \#*#
+
+# oe logs and workdir
+oe-logs
+oe-workdir

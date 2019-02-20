@@ -12,7 +12,7 @@ start ()
     touch /usr/bin/game
     adduser ectf --shell /usr/bin/game --disabled-password --gecos ""
     chown ectf:ectf /usr/bin/game
-    chmod o+x /usr/bin/game
+    chmod u+x /usr/bin/game
 
     # uio stuff
     chmod a+wr /dev/uio*
@@ -24,12 +24,11 @@ start ()
     # set tty device with correct baud
     stty -F /dev/ttyPS0 speed 115200
 
-    # login ectf
-    /bin/login -f ectf
-
-    # load and launch game
+    # load the game in ramfs
     mesh-game-loader
-    game
+   
+    # login ectf and launch the game
+    /bin/login -f ectf
 
     # restart so user doesnt fall through to petalinux shell
     echo "Game over. Restarting system..."
