@@ -203,7 +203,7 @@ def sign_game(message, pk_file):
     signed_encrypted_game = pysodium.crypto_sign(message, sk)
     return signed_encrypted_game, pk
 
-def verify_signature(pk, signed_encrypted):
+def verify_signature(signed_encrypted, pk):
     #print("signed_encrypted: 0x"+",0x".join("{:02x}".format(ord(c)) for c in signed_encrypted))
     #print(len(signed_encrypted))
     encrypted = pysodium.crypto_sign_open(signed_encrypted, pk)
@@ -247,8 +247,9 @@ def encrypt_header(users, game, gamekey, gamenonce, key, nonce):
     #print(header)
     encrypted_header = encrypt(key, nonce, header)
     # append len 
-    header_len = len(encrypted_header)
-    return out_name, header_len, encrypted_header
+    header_len = pack('Q', len(encrypted_header))
+    encrypted_header = header_len + encrypted_header
+    return out_name, encrypted_header
 
 def gen_keypair():
     pk, sk = pysodium.crypto_sign_keypair()
@@ -269,12 +270,14 @@ def sign(message, sk):
 # PK is a standard secret. 
 # So is the user nonce???
 # For now, hardcode the user nonce. 
-def encrypt_sign_file(users, game, pk, key, nonce):
+def encrypt_sign_file(users, game, sk, key, nonce, pk):
     (gamekey, gamenonce) = gen_key_nonce()
-    (out_name, encrypted_header_len, encrypted_header) = encrypt_header(users, game, gamekey, gamenonce, key, nonce)
+    (out_name, encrypted_header) = encrypt_header(users, game, gamekey, gamenonce, key, nonce)
     encrypted_game = encrypt_game(game, gamekey, gamenonce)
-    header_game = str(encrypted_header_len) + str(encrypted_header) + str(encrypted_game)
+    header_game = str(encrypted_header) + str(encrypted_game)
     signed_file = sign(header_game, sk)
+    print(len(sk))
+    header_game = verify_signature(signed_file, pk)
     fp = open(out_name,'wb');
     fp.write(signed_file)
     fp.close()
@@ -338,14 +341,11 @@ if __name__ == "__main__":
     #   append header+game
     #   sign header+game
     #   spit out signed file. 
-    '''
-    header = bytes("version:%s\n" % (version), "utf-8")
-    header += bytes("name:%s\n" % (name), "utf-8")
-    for user in users:
-        header = bytes("users:%s\n" % (user), "utf-8")
-    '''
     pk_file = open('pk.out', 'wb')
     pk, sk = gen_keypair()
+    print(len(pk))
+    print(len(sk))
+    print(pysodium.crypto_sign_PUBLICKEYBYTES)
     pk_file.write(pk)
     pk_file.close()
 
@@ -359,16 +359,38 @@ if __name__ == "__main__":
     users = read_users('demo_files/demo_users_salt.txt')
     game_lines = read_games('demo_files/demo_games_test.txt')
     for game in game_lines:
-        encrypt_sign_file(users, game, sk, key, nonce)
+        encrypt_sign_file(users, game, sk, key, nonce, pk)
+
+    # read in arbitrary game file, pass in user, pin, salt, pk, key, nonce
+    game_file = open('2048-v1.0', 'rb')
+    pk_file = open('pk.out','rb')
+    nonce_file = open('nonce.out', 'rb')
+    key_file = open('key.out', 'rb')
+    game = game_file.read()
+    pk = pk_file.read()
+    nonce = nonce_file.read()
+    key = key_file.read()
+    user = "user1"
+    pin = "12345678"
+    salt = base64.b64encode(b'waUNqGdgxntpJBfyXFIO/w==')
+    game_file.close()
+    pk_file.close()
+    nonce_file.close()
+    key_file.close()
+    # unsign
+    # get len
+    # split header and game
+    # decrypt header
+    # parse to get userkey
+    # decrypt gamekeynonce
+    # decrypt game
+    # write game
     '''
     salt, user_key = gen_userkey("user1", "12345678", "2048", "1.1")
     salt_file = open("salt.out", 'wb')
     salt_file.write(salt)
     salt_file.close()
 
-    out_file = open('game.out', 'wb')
-    pk_file = open('pk.out','wb')
-    user_nonce_file = open('user_nonce.out', 'wb')
 
     f = open('demo_files/2048', 'rb')
     message = f.read()
@@ -386,13 +408,18 @@ if __name__ == "__main__":
     signed_encrypted, pk = sign_game(file_buf, pk_file)
     # this is everything
     out_file.write(signed_encrypted)
-
+    '''
     # verify sig for entire file
-    file_buf  = verify_signature(pk, signed_encrypted)
+    file_buf = verify_signature(pk, game)
     # split
     encrypted_header_len = unpack('Q', file_buf[:8])[0]
-    encoded_gamekey_nonce = file_buf[8:(encrypted_header_len+8)]
+    # decrypt header
+
+    encrypted_header = file_buf[8:(encrypted_header_len+8)]
     ciphertext = file_buf[encrypted_header_len+8:]
+    header = decrypt(key, nonce, encrypted_header)
+    print(header)
+    '''
     derived_gamekey_nonce = decrypt(user_key, user_nonce, encoded_gamekey_nonce)
     #print(derived_gamekey_nonce)
     derived_gamekey = derived_gamekey_nonce[:32]
