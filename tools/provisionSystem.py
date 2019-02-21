@@ -175,13 +175,28 @@ def write_factory_secrets(users, f, h):
     salt_array = []
     for user in users:
         salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
-        f.write(user[0] + ' ' + user[1] + ' ' + salt + '\n')
+        f.write(user[0]+ ' '+ user[1] + ' '+ base64.b64encode(salt).decode() + '\n')
         salt_array.append([user[0], salt])
     header_key, header_nonce = gen_key_nonce()
     pk, sk = gen_keypair()
-    f.write(header_key)
-    f.write(header_nonce)
-    f.write(sk)
+    f.write(base64.b64encode(header_key).decode() + '\n')
+    f.write(base64.b64encode(header_nonce).decode() + '\n')
+    f.write(base64.b64encode(sk).decode() + '\n')
+
+    pk_bytes = ""
+    for i in pk[:-1]:
+        pk_bytes += '0x%x, ' % i
+    pk_bytes += '0x%x' % pk[-1]
+
+    header_key_bytes = ""
+    for i in header_key[:-1]:
+        header_key_bytes += '0x%x, ' % i
+    header_key_bytes += '0x%x' % header_key[-1]
+
+    header_nonce_bytes = ""
+    for i in header_nonce[:-1]:
+        header_nonce_bytes += '0x%x, ' % i
+    header_nonce_bytes += '0x%x' % header_nonce[-1]
 
     s = """
 /*
@@ -193,15 +208,19 @@ def write_factory_secrets(users, f, h):
 #ifndef __SECRET_H__
 #define __SECRET_H__
 
-static char* sign_public_key = \""""
-    s += base64.b64encode(pk).decode('utf-8')
-    s += """\" ;\nstatic char* header_key = \""""
-    s += base64.b64encode(header_key).decode('utf-8')
-    s += "\";\nstatic char* header_nonce = \""
-    s += base64.b64encode(header_nonce).decode('utf-8')
-    s += "\";\n"
+static char* sign_public_key = {"""
+    s += pk_bytes
+    s += """};\nstatic char* header_key = {"""
+    s += header_key_bytes
+    s += "};\nstatic char* header_nonce = {"
+    s += header_nonce_bytes
+    s += "};\n"
     for entry in salt_array:
-        s += "static char* " + entry[0] + "_salt = \"" + base64.b64encode(entry[1]).decode('utf-8') + "\";\n"
+        salt_bytes = ""
+        for i in entry[1][:-1]:
+            salt_bytes += '0x%x, ' % i
+        salt_bytes += '0x%x' % entry[1][-1]
+        s += "static char* " + entry[0] + "_salt = {" + salt_bytes + "};\n"
     s += """
 #endif /* __SECRET_H__ */
 """
