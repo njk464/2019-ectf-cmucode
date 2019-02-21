@@ -7,11 +7,6 @@ import argparse
 import base64
 import pysodium
 
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-
-
 # Path to the mesh_users header file
 mesh_users_fn = os.environ["ECTF_UBOOT"] + "/include/mesh_users.h"
 # Path to the default_games header file
