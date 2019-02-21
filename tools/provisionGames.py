@@ -131,7 +131,7 @@ def provision_game(line, user_array, header_key, header_nonce, sk):
     encrypted_game = encrypt_game(line, gamekey, gamenonce)
     header_game = encrypted_header + encrypted_game
     signed_file = sign(header_game, sk)
-    f_out_name.write(signed_file)
+    f_out.write(signed_file)
 
     # header = bytes("version:%s\n" % (version), "utf-8")
     # header += bytes("name:%s\n" % (name), "utf-8")
