@@ -183,6 +183,21 @@ def write_factory_secrets(users, f, h):
     f.write(header_nonce + '\n'.encode())
     f.write(sk + '\n'.encode())
 
+    pk_bytes = ""
+    for i in pk[:-1]:
+        pk_bytes += '0x%x, ' % i
+    pk_bytes += '0x%x' % pk[-1]
+
+    header_key_bytes = ""
+    for i in header_key[:-1]:
+        header_key_bytes += '0x%x, ' % i
+    header_key_bytes += '0x%x' % header_key[-1]
+
+    header_nonce_bytes = ""
+    for i in header_nonce[:-1]:
+        header_nonce_bytes += '0x%x, ' % i
+    header_nonce_bytes += '0x%x' % header_nonce[-1]
+
     s = """
 /*
 * This is an automatically generated file by provisionSystem.py
@@ -193,12 +208,12 @@ def write_factory_secrets(users, f, h):
 #ifndef __SECRET_H__
 #define __SECRET_H__
 
-static char* sign_public_key = \""""
-    s += base64.b64encode(pk).decode('utf-8')
-    s += """\" ;\nstatic char* header_key = \""""
-    s += base64.b64encode(header_key).decode('utf-8')
+static char* sign_public_key = {"""
+    s += pk_bytes
+    s += """};\nstatic char* header_key = \""""
+    s += header_key_bytes
     s += "\";\nstatic char* header_nonce = \""
-    s += base64.b64encode(header_nonce).decode('utf-8')
+    s += header_nonce_bytes
     s += "\";\n"
     for entry in salt_array:
         salt_bytes = ""
