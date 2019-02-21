@@ -25,15 +25,17 @@ start ()
     stty -F /dev/ttyPS0 speed 115200
 
     # load the game in ramfs
-    mesh-game-loader
+    ##mesh-game-loader
    
     # login ectf and launch the game
-    /bin/login -f ectf
+    ##/bin/login -f ectf
+
+
 
     # restart so user doesnt fall through to petalinux shell
-    echo "Game over. Restarting system..."
-    sleep 5
-    shutdown -r now
+    ##echo "Game over. Restarting system..."
+    ##sleep 5
+    ##shutdown -r now
 
 }
 stop ()
