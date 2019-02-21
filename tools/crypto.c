@@ -1,8 +1,16 @@
-#include <sodium.h>
+// #include <sodium.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
+#include "libsodium.h"
+
+#define crypto_pwhash_SALTBYTES 16U
+#define crypto_pwhash_OPSLIMIT_MIN 1U
+#define crypto_pwhash_MEMLIMIT_MIN 8192U
+#define crypto_pwhash_ALG_DEFAULT 2U
+#define crypto_secretbox_BOXZEROBYTES 16U
+#define crypto_secretbox_NONCEBYTES 24U
+#define crypto_secretbox_KEYBYTES 32U
+#define crypto_sign_PUBLICKEYBYTES 32U
 
 #define HEADER_LEN 16
 
@@ -40,17 +48,17 @@ void read_from_file(unsigned char *ptr, unsigned char *file_name, unsigned int l
 }
 
 void print_hex(unsigned char *ptr, unsigned int len) {
-  	int i;
-  	bool first = true;
+      int i;
+      int first = 1;
     for (i = 0; i < len; i++) {
-    	if(first) {
+        if(first) {
             printf("0x%02x", ptr[i]);
-            first = false; 
+            first = 0; 
         } else {
             printf(",0x%02x", ptr[i]);
-  	    }
+          }
     }
-  	printf("\n");
+      printf("\n");
 }
 
 void gen_userkey(char *key, char* name, char* pin, char* game_name, char* version){
@@ -68,12 +76,12 @@ void gen_userkey(char *key, char* name, char* pin, char* game_name, char* versio
     // PASSWORD = name + pin + game_name + version
     read_from_file(salt, "salt.out", crypto_pwhash_SALTBYTES);
     if (crypto_pwhash(key, 32, password, strlen(password), salt, 
-			crypto_pwhash_OPSLIMIT_MIN, crypto_pwhash_MEMLIMIT_MIN,
-     		crypto_pwhash_ALG_DEFAULT) == 0) {
-	} else {
-		printf("Key Gen Failed\n");    
+            crypto_pwhash_OPSLIMIT_MIN, crypto_pwhash_MEMLIMIT_MIN,
+             crypto_pwhash_ALG_DEFAULT) == 0) {
+    } else {
+        printf("Key Gen Failed\n");    
         exit(0);
-	}
+    }
 }
 
 // Returns valud in message
@@ -133,8 +141,73 @@ int verify_signed(unsigned char* signed_data, unsigned char* verified, unsigned 
     }
 }
 
-int main(){
+int nick_test(){
+    if (sodium_init() < 0) {
+        printf("Error in Crypto Library\n");
+        exit(0);
+    }
+    printf("Start\n");
+    char game_key[crypto_secretbox_KEYBYTES];
+    read_from_file(game_key, "key.out", crypto_secretbox_KEYBYTES);
+    char game_nonce[crypto_secretbox_NONCEBYTES];
+    read_from_file(game_nonce, "nonce.out", crypto_secretbox_NONCEBYTES);
+    
+    unsigned long long int len = get_len("nick.out");
+    
+    char *ciphertext;
+    ciphertext = safe_calloc(len);
+    printf("Read key and nonce\n");
+    read_from_file(ciphertext, "nick.out", len);
+    printf("Read from file\n");
+    unsigned long long int decrypted_game_len = len - crypto_secretbox_MACBYTES;
 
+    char *message;
+    message = safe_calloc(decrypted_game_len);
+    printf("Decrypt\n");
+    decrypt(game_key, game_nonce, ciphertext, len, message);
+
+    printf("Post decrypt\n");
+    FILE *fp;
+    fp = fopen("nick_dec.out", "w");
+    fwrite(message, 1, decrypted_game_len, fp);
+    fclose(fp);
+    return 0;
+}
+
+int decrypt_test(){
+    if (sodium_init() < 0) {
+        printf("Error in Crypto Library\n");
+        exit(0);
+    }
+    printf("Start\n");
+    char game_key[crypto_secretbox_KEYBYTES];
+    read_from_file(game_key, "key.out", crypto_secretbox_KEYBYTES);
+    char game_nonce[crypto_secretbox_NONCEBYTES];
+    read_from_file(game_nonce, "nonce.out", crypto_secretbox_NONCEBYTES);
+    
+    unsigned long long int len = get_len("nick.out");
+    
+    char *ciphertext;
+    ciphertext = safe_calloc(len);
+    // printf("Read key and nonce\n");
+    read_from_file(ciphertext, "nick.out", len);
+    // printf("Read from file\n");
+    unsigned long long int decrypted_game_len = len - crypto_secretbox_MACBYTES;
+
+    char *message;
+    message = safe_calloc(decrypted_game_len);
+    // printf("Decrypt\n");
+    decrypt(game_key, game_nonce, ciphertext, len, message);
+
+    // printf("Post decrypt\n");
+    FILE *fp;
+    fp = fopen("nick_dec.out", "w");
+    fwrite(message, 1, decrypted_game_len, fp);
+    fclose(fp);
+    return 0;
+}
+
+int singed_basic_header_test(){
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
         exit(0);
@@ -144,8 +217,8 @@ int main(){
     // read user nonce.
     char user_nonce[crypto_secretbox_NONCEBYTES];
     read_from_file(user_nonce, "user_nonce.out", crypto_secretbox_NONCEBYTES);
-    // gamekey_nonce
-    char pk[crypto_sign_PUBLICKEYBYTES];
+    // gamekey_nonce 
+    char pk[crypto_sign_PUBLICKEYBYTES]; 
     read_from_file(pk, "pk.out", crypto_sign_PUBLICKEYBYTES);
     /* main starts here*/
     unsigned long long int unverified_len = get_len("game.out");
@@ -198,4 +271,10 @@ int main(){
     }
     safe_free(signed_ciphertext, unverified_len);
     safe_free(verified_ciphertext, verified_len);
+    return 1;
+}
+
+int main(){
+    decrypt_test();
+    // singed_basic_header_test();
 }

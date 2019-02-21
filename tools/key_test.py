@@ -1,9 +1,3 @@
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 import base64
 import os
 import re
@@ -11,119 +5,6 @@ import pickle
 from struct import *
 import pysodium
 import array
-
-
-def write_factory_secrets(f, h):
-    """Write any factory secrets. The reference implementation has none
-    TODO: Evaluate the size of the keys
-    f: open file to write the factory secrets to
-    """
-    # key = RSA.generate(4096)
-    # f.write(key.exportKey())
-    # h.write(key.publicKey.exportKey())
-    encrypt_key = rsa.generate_private_key(
-        public_exponent=65537, 
-        key_size=2048, 
-        backend=default_backend()
-        )
-    encrypt_key_priv = encrypt_key.private_bytes(
-        encoding=serialization.Encoding.PEM, 
-        format=serialization.PrivateFormat.PKCS8, 
-        encryption_algorithm=serialization.NoEncryption()
-        )
-
-    public_key = encrypt_key.public_key()
-    encrypt_key_pub = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM, 
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-    f.write(encrypt_key_pub.decode('utf-8'))
-    f.write("*****\n")
-    shared_key = os.urandom(64)
-    f.write(base64.b64encode(shared_key).decode('utf-8'))
-
-    s = """
-/*
-* This is an automatically generated file by provisionSystem.py
-*
-*
-*/
-
-#ifndef __SECRET_H__
-#define __SECRET_H__
-
-static char* encrypt_priv_key = \""""
-    s += base64.b64encode(encrypt_key_priv).decode('utf-8')
-    s +="""\";
-static char* shared_key = \""""
-    s += base64.b64encode(shared_key).decode('utf-8')
-    s += """\" ;
-
-#endif /* __SECRET_H__ */
-"""
-    h.write(s)
-
-def open_users(path):
-    f_mesh_users_in = open(path, "r")
-    lines = [line.rstrip('\n') for line in f_mesh_users_in]
-    users = validate_users(lines)
-    return users
-
-def create_factory_secrets(users, f, h):
-    """Write any factory secrets. The reference implementation has none
-    f: open file to write the factory secrets to
-    h: open file to write data to pass along to shell
-    """
-    for user in users:
-        f.write(user[0] + ' ' + user[1] + ' salt\n')
-    # f.write("This is totes a key again\n")
-
-    sign_key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-        backend=default_backend()
-        )
-    sign_key_priv = sign_key.private_bytes(
-        encoding=serialization.Encoding.PEM, 
-        format=serialization.PrivateFormat.PKCS8, 
-        encryption_algorithm=serialization.NoEncryption()
-        )
-    public_key = sign_key.public_key()
-    sign_key_pub = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM, 
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-    f.write(base64.b64encode(sign_key_priv).decode('utf-8'))
-
-    s = """
-/*
-* This is an automatically generated file by provisionSystem.py
-*
-*
-*/
-
-#ifndef __SECRET_H__
-#define __SECRET_H__
-
-static char* sign_public_key = \""""
-    s += base64.b64encode(sign_key_pub).decode('utf-8')
-    s += """\" ;
-
-#endif /* __SECRET_H__ */
-"""
-    h.write(s)
-
-def read_factory_secrets(f):
-    lines = [line.rstrip('\n') for line in f]
-    key = lines[-1:]
-    # print(key)
-    # print(lines[:-1])
-    # users = validate_users(lines[:-1])
-    array = []
-    for user in lines:
-        array.append(user.split(' '))
-    # print(array)
-    return array, key
 
 def generate_and_encrypt(message):
     # This must be kept secret, this is the combination to your safe
@@ -193,10 +74,11 @@ def verify_signature(signed_encrypted, pk):
     return encrypted
 
 def gen_userkey(user, pin, salt, game_name, version):
-    password = str(user) + str(pin) + str(game_name) + str(version)
-    #salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
-    key = pysodium.crypto_pwhash(32, password, salt, pysodium.crypto_pwhash_OPSLIMIT_MIN, pysodium.crypto_pwhash_MEMLIMIT_MIN, 2)
-    #print(key)
+    password = str(user) + str(pin) + str(game_name) + str(version) + str(salt)
+    # salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
+    # key = pysodium.crypto_pwhash(32, password, salt, pysodium.crypto_pwhash_OPSLIMIT_MIN, pysodium.crypto_pwhash_MEMLIMIT_MIN, 2)
+    key = pysodium.crypto_hash_sha256(password)
+    # print(key)
     return key
 
 def encrypt_header(users, game, gamekey, gamenonce, key, nonce):
@@ -255,7 +137,7 @@ def encrypt_sign_file(users, game, sk, key, nonce, pk):
     header_game = encrypted_header + encrypted_game
     signed_file = sign(header_game, sk)
     header_game = verify_signature(signed_file, pk)
-    fp = open(out_name,'wb');
+    fp = open(out_name,'wb')
     fp.write(signed_file)
     fp.close()
 
@@ -294,30 +176,7 @@ def read_games(game_desc_file):
 
     return games
 
-if __name__ == "__main__":
-    # f = open("factorySecrets.txt", "w")
-    # h = open("secret.h", "w")
-    # # write_factory_secrets(f, h)
-    # users = open_users('demo_files/demo_users.txt')
-    # create_factory_secrets(users, f, h)
-    # f.close()
-    # f = open("factorySecrets.txt", "r")
-    # array, key = read_factory_secrets(f)
-    # reate_games(f)
-    # f.close()
-
-    # read in data from files
-    # user pin salt
-    # game who_can_play_them
-
-    # for each game
-    #   generate game key
-    #       create header with meta data and encrypted game keys
-    #       encrypt header
-    #   encrypt game
-    #   append header+game
-    #   sign header+game
-    #   spit out signed file. 
+def full_game_encrypt_test():
     pk_file = open('pk.out', 'wb')
     pk, sk = gen_keypair()
     pk_file.write(pk)
@@ -329,60 +188,16 @@ if __name__ == "__main__":
     nonce_file = open('nonce.out', 'rb')
     nonce = nonce_file.read()
     nonce_file.close()
-
-    users = read_users('demo_files/demo_users_salt.txt')
-    game_lines = read_games('demo_files/demo_games_test.txt')
-    for game in game_lines:
-        encrypt_sign_file(users, game, sk, key, nonce, pk)
-
-    # read in arbitrary game file, pass in user, pin, salt, pk, key, nonce
-    game_file = open('2048-v1.0', 'rb')
-    pk_file = open('pk.out','rb')
-    nonce_file = open('nonce.out', 'rb')
-    key_file = open('key.out', 'rb')
+    game_file = open('demo_files/2048', 'rb')
     game = game_file.read()
-    pk = pk_file.read()
-    nonce = nonce_file.read()
-    key = key_file.read()
-    user = "user1"
-    pin = "12345678"
-    salt = base64.b64decode(b'waUNqGdgxntpJBfyXFIO/w==')
-    game_file.close()
-    pk_file.close()
-    nonce_file.close()
-    key_file.close()
-    # unsign
-    # get len
-    # split header and game
-    # decrypt header
-    # parse to get userkey
-    # decrypt gamekeynonce
-    # decrypt game
-    # write game
-    '''
-    salt, user_key = gen_userkey("user1", "12345678", "2048", "1.1")
-    salt_file = open("salt.out", 'wb')
-    salt_file.write(salt)
-    salt_file.close()
+    encrypted_game = encrypt(key, nonce, game)
+    # signed_encrypted = sign(encrypt_game, sk)
 
+    out_file = open('nick.out', 'wb')
+    out_file.write(encrypted_game)
+    out_file.close()
 
-    f = open('demo_files/2048', 'rb')
-    message = f.read()
-    #message = b"The president will be exiting through the lower levels."
-    ciphertext, game_key, game_nonce = generate_and_encrypt(message)
-    # given the user key, encrypt the game_key and nonce
-    encoded_gamekey_nonce, user_nonce  = encrypt_game_key(user_key, game_key, game_nonce)
-    user_nonce_file.write(user_nonce)
-    # pack data as 64 bits
-    encrypted_header_len = pack('Q', len(encoded_gamekey_nonce))
-    print(encrypted_header_len)
-
-    file_buf = encrypted_header_len + encoded_gamekey_nonce + ciphertext
-
-    signed_encrypted, pk = sign_game(file_buf, pk_file)
-    # this is everything
-    out_file.write(signed_encrypted)
-    '''
+def verify_everything(game, pk, pin, salt, key, nonce):
     # verify sig for entire file
     file_buf = verify_signature(game, pk)
     # split
@@ -390,48 +205,88 @@ if __name__ == "__main__":
     # decrypt header
 
     encrypted_header = file_buf[8:(encrypted_header_len+8)]
-    
     ciphertext = file_buf[encrypted_header_len+8:]
     header = decrypt(key, nonce, encrypted_header)
     header = header.decode('utf-8')
-    print(header)
+    # print(header)
     header_data = header.splitlines()
-    version = header_data[0]
-    name = header_data[1]
+    version = header_data[0][8:]
+    # print("version: " + version)
+    name = header_data[1][5:]
     user = header_data[2].split()
     user_name = user[0][6:]
     print(user_name)
     enc_game_key_nonce = base64.b64decode(user[1][1:])
-    print("Gamekeynonce: " + str(enc_game_key_nonce))
+    # print("Gamekeynonce: " + str(enc_game_key_nonce))
     user_nonce = base64.b64decode(user[2][1:])    
-    print("user_nonce: " + str(user_nonce))
-    userkey = gen_userkey(user_name, pin, salt, "2048", "1.0")
+    # print("user_nonce: " + str(user_nonce))
+    userkey = gen_userkey(user_name, pin, salt, name, version)
     game_key_nonce = decrypt(userkey, user_nonce, enc_game_key_nonce)
-    print(game_key_nonce)
+    # print(game_key_nonce)
     game_key = game_key_nonce[:32]
     game_nonce = game_key_nonce[32:]
-    print(game_key)
-    print(game_nonce)
-    print(len(game_key))
-    print(len(game_nonce))
+    # print(game_key)
+    # print(game_nonce)
+    # print(len(game_key))
+    # print(len(game_nonce))
     decrypted_game = decrypt(game_key, game_nonce, ciphertext)
     f = open("out.out", 'wb')
     f.write(decrypted_game)
     f.close()
+    print("Successful")
 
-    '''
-    derived_gamekey_nonce = decrypt(user_key, user_nonce, encoded_gamekey_nonce)
-    #print(derived_gamekey_nonce)
-    derived_gamekey = derived_gamekey_nonce[:32]
-    derived_nonce = derived_gamekey_nonce[32:]
 
-    message = decrypt(derived_gamekey, derived_nonce, ciphertext)
+if __name__ == "__main__":
+    full_game_encrypt_test()
+    # pk_file = open('pk.out', 'wb')
+    # pk, sk = gen_keypair()
+    # pk_file.write(pk)
+    # pk_file.close()
 
-    print(message)
+    # key_file = open('key.out', 'rb')
+    # key = key_file.read()
+    # key_file.close()
+    # nonce_file = open('nonce.out', 'rb')
+    # nonce = nonce_file.read()
+    # nonce_file.close()
+    # # read in data from files
+    # # user pin salt
+    # # game who_can_play_them
 
-    user_nonce_file.close()
-    out_file.close()
-    pk_file.close()
-    #print(cipherText[:16])
-    #use_key(key, nonce, cipherText)
-    '''
+    # # for each game
+    # #   generate game key
+    # #       create header with meta data and encrypted game keys
+    # #       encrypt header
+    # #   encrypt game
+    # #   append header+game
+    # #   sign header+game
+    # #   spit out signed file. 
+
+    # users = read_users('demo_files/demo_users_salt.txt')
+    # game_lines = read_games('demo_files/demo_games_test.txt')
+    # for game in game_lines:
+    #     encrypt_sign_file(users, game, sk, key, nonce, pk)
+
+    # # read in arbitrary game file, pass in user, pin, salt, pk, key, nonce
+    # game_file = open('2048-v1.0', 'rb')
+    # pk_file = open('pk.out','rb')
+    # nonce_file = open('nonce.out', 'rb')
+    # key_file = open('key.out', 'rb')
+    # game = game_file.read()
+    # pk = pk_file.read()
+    # nonce = nonce_file.read()
+    # key = key_file.read()
+    # user = "user1"
+    # pin = "12345678"
+    # salt = base64.b64decode(b'waUNqGdgxntpJBfyXFIO/w==')
+    # game_file.close()
+    # pk_file.close()
+    # nonce_file.close()
+    # key_file.close()
+
+    # # verify the data
+
+    # f = open('2048-v1.0', 'rb')
+    # game = f.read()
+    # f.close()
+    # verify_everything(game, pk, pin, salt, key, nonce)
