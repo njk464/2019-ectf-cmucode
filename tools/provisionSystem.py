@@ -175,7 +175,7 @@ def write_factory_secrets(users, f, h):
     salt_array = []
     for user in users:
         salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
-        f.write(user[0] + ' ' + user[1] + ' ' + salt + '\n')
+        f.write(user[0] + ' ' + user[1] + ' ' + base64.b64encode(salt).decode() + '\n')
         salt_array.append([user[0], salt])
     header_key, header_nonce = gen_key_nonce()
     pk, sk = gen_keypair()
@@ -201,7 +201,10 @@ static char* sign_public_key = \""""
     s += base64.b64encode(header_nonce).decode('utf-8')
     s += "\";\n"
     for entry in salt_array:
-        s += "static char* " + entry[0] + "_salt = \"" + base64.b64encode(entry[1]).decode('utf-8') + "\";\n"
+        for i in entry[1][:-1]:
+            salt_bytes += '0x%x, ' % i
+        salt_bytes += '0x%x' % entry[1][-1]
+        s += "static char* " + entry[0] + "_salt = {" + salt_bytes + "};\n"
     s += """
 #endif /* __SECRET_H__ */
 """
