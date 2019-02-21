@@ -175,7 +175,7 @@ def write_factory_secrets(users, f, h):
     salt_array = []
     for user in users:
         salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
-        f.write(user[0] + ' ' + user[1] + ' ' + base64.b64encode(salt).decode() + '\n')
+        f.write(user[0].encode() + ' ' + user[1].encode() + ' ' + salt + '\n')
         salt_array.append([user[0], salt])
     header_key, header_nonce = gen_key_nonce()
     pk, sk = gen_keypair()
@@ -260,7 +260,7 @@ def main():
         exit(2)
 
     try:
-        f_secret_header = open(secret_header_fn, "w+")
+        f_secret_header = open(secret_header_fn, "wb")
     except Exception as e:
         print("Unable to open secret header file: %s" % (e,))
         exit(2)
