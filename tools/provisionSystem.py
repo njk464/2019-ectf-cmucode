@@ -175,13 +175,13 @@ def write_factory_secrets(users, f, h):
     salt_array = []
     for user in users:
         salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
-        f.write(user[0].encode() + ' '.encode() + user[1].encode() + ' '.encode() + salt + '\n'.encode())
+        f.write(user[0]+ ' '+ user[1] + ' '+ base64.b64encode(salt).decode() + '\n')
         salt_array.append([user[0], salt])
     header_key, header_nonce = gen_key_nonce()
     pk, sk = gen_keypair()
-    f.write(header_key + '\n'.encode())
-    f.write(header_nonce + '\n'.encode())
-    f.write(sk + '\n'.encode())
+    f.write(base64.b64encode(header_key).decode() + '\n')
+    f.write(base64.b64encode(header_nonce).decode() + '\n')
+    f.write(base64.b64encode(sk).decode() + '\n')
 
     pk_bytes = ""
     for i in pk[:-1]:
@@ -270,7 +270,7 @@ def main():
         print("Unable to open %s: %s" % (system_image_fn, e,))
         exit(2)
     try:
-        f_factory_secrets = open(os.path.join(gen_path, factory_secrets_fn), "wb")
+        f_factory_secrets = open(os.path.join(gen_path, factory_secrets_fn), "w+")
     except Exception as e:
         print("Unable to open %s: %s" % (factory_secrets_fn, e,))
         exit(2)
