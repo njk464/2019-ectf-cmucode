@@ -40,7 +40,7 @@ def encrypt_game_key(user_key, game_key, game_nonce):
     return encrypted_gamekey_nonce, nonce
 
 def encrypt_game(game, gamekey, gamenonce):
-    gamepath = game[0]
+    gamepath = game.split()[0]
     gamebin = open(gamepath, 'rb').read()
     encrypted_game = pysodium.crypto_secretbox(gamebin, gamenonce, gamekey)
     return encrypted_game
