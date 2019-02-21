@@ -73,12 +73,10 @@ def verify_signature(signed_encrypted, pk):
     #print("cipherText: 0x"+",0x".join("{:02x}".format(ord(c)) for c in cipherText))
     return encrypted
 
+# Given data, generats a key via sha256
 def gen_userkey(user, pin, salt, game_name, version):
-    password = str(user) + str(pin) + str(game_name) + str(version) + str(salt)
-    # salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
-    # key = pysodium.crypto_pwhash(32, password, salt, pysodium.crypto_pwhash_OPSLIMIT_MIN, pysodium.crypto_pwhash_MEMLIMIT_MIN, 2)
+    password = user.encode() + pin.encode() + game_name.encode() + version.encode() + salt
     key = pysodium.crypto_hash_sha256(password)
-    # print(key)
     return key
 
 def encrypt_header(users, game, gamekey, gamenonce, key, nonce):
@@ -235,9 +233,21 @@ def verify_everything(game, pk, pin, salt, key, nonce):
     f.close()
     print("Successful")
 
+# Function is used to generate a key passed on user data
+# Out file it then tested with the same outfile from C
+def gen_userkey_test():
+    salt_file = open('salt.out', 'rb')
+    salt = salt_file.read()
+    salt_file.close()
+    userkey = gen_userkey("user1", "12345678", salt, "2048", "1.1")
+    # Write to a file if nessary to verify
+    #userkeyout_file = open('userkey.out', 'wb')
+    #userkeyout_file.write(userkey)
+    #userkeyout_file.close()
 
 if __name__ == "__main__":
-    full_game_encrypt_test()
+    #full_game_encrypt_test()
+    gen_userkey_test()
     # pk_file = open('pk.out', 'wb')
     # pk, sk = gen_keypair()
     # pk_file.write(pk)

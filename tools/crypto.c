@@ -1,7 +1,7 @@
-// #include <sodium.h>
+#include <sodium.h>
 #include <stdio.h>
 #include <string.h>
-#include "libsodium.h"
+//#include "libsodium.h"
 
 #define crypto_pwhash_SALTBYTES 16U
 #define crypto_pwhash_OPSLIMIT_MIN 1U
@@ -66,22 +66,18 @@ void gen_userkey(char *key, char* name, char* pin, char* game_name, char* versio
 //#define MAX_PIN_LENGTH 8
 //#define MAX_GAME_LENGTH 31
 //#define MAX_NUM_USERS 5
-    //TODO: sketch
-    int MAX_PASSWORD_SIZE = 15 + 8 + 31 + 5; 
-    char password[MAX_PASSWORD_SIZE]; 
-    char salt[crypto_pwhash_SALTBYTES];
-    
-    memset(key, 0, 32);
-    sprintf(password, "%s%s%s%s", name, pin, game_name, version);
-    // PASSWORD = name + pin + game_name + version
+// #define salt len 16    
+//TODO: sketch
+    int MAX_PASSWORD_SIZE = strlen(name) + strlen(pin) + strlen(game_name) + strlen(version) + crypto_pwhash_SALTBYTES ; 
+    char password[MAX_PASSWORD_SIZE];
+    char salt[crypto_pwhash_SALTBYTES]; 
     read_from_file(salt, "salt.out", crypto_pwhash_SALTBYTES);
-    if (crypto_pwhash(key, 32, password, strlen(password), salt, 
-            crypto_pwhash_OPSLIMIT_MIN, crypto_pwhash_MEMLIMIT_MIN,
-             crypto_pwhash_ALG_DEFAULT) == 0) {
-    } else {
-        printf("Key Gen Failed\n");    
-        exit(0);
-    }
+    memset(key, 0, crypto_hash_sha256_BYTES);
+    sprintf(password, "%s%s%s%s%s", name, pin, game_name, version, salt);
+    // PASSWORD = name + pin + game_name + version
+    int ret = crypto_hash_sha256(key, password, MAX_PASSWORD_SIZE);
+    //printf("The key is: ");
+    //print_hex(key, crypto_hash_sha256_BYTES);
 }
 
 // Returns valud in message
@@ -274,7 +270,17 @@ int singed_basic_header_test(){
     return 1;
 }
 
+void gen_userkey_test(){
+    if (sodium_init() < 0) {
+        printf("Error in Crypto Library\n");
+        exit(0);
+    }
+    char user_key[32];
+    gen_userkey(user_key,"user1", "12345678", "2048", "1.1");
+}
+
 int main(){
-    decrypt_test();
+    // decrypt_test();
     // singed_basic_header_test();
+    gen_userkey_test();
 }
