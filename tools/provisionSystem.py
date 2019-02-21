@@ -210,11 +210,11 @@ def write_factory_secrets(users, f, h):
 
 static char* sign_public_key = {"""
     s += pk_bytes
-    s += """};\nstatic char* header_key = \""""
+    s += """};\nstatic char* header_key = {"""
     s += header_key_bytes
-    s += "\";\nstatic char* header_nonce = \""
+    s += "};\nstatic char* header_nonce = {"
     s += header_nonce_bytes
-    s += "\";\n"
+    s += "};\n"
     for entry in salt_array:
         salt_bytes = ""
         for i in entry[1][:-1]:
