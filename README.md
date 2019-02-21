@@ -1,4 +1,4 @@
-# 2019 Collegiate eCTF Example Code
+# 2019 Collegiate eCTF ROP it like it's hot code
 
 This repository contains an gaming system for CMU's team ROP it like it's hot used for MITRE's 2019 [Embedded System CTF](http://mitrecyberacademy.org/competitions/embedded/). 
 The example reference system was based off of [this repository](https://github.com/Digilent/Petalinux-Arty-Z7-10).
