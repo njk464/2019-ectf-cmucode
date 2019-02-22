@@ -209,7 +209,6 @@ def verify_everything(gamepath, pk, username, pin, salt, header_key, header_nonc
     # split
     encrypted_header_len = unpack('Q', file_buf[:8])[0]
     # decrypt header
- 	 
     #print("" + ''.join('\\x{:02x}'.format(x) for x in file_buf) + "")
     print(encrypted_header_len)
     encrypted_header = file_buf[8:(encrypted_header_len+8)]
@@ -218,12 +217,34 @@ def verify_everything(gamepath, pk, username, pin, salt, header_key, header_nonc
     #header = header.decode('utf-8')
     print(header)
     version = header[8:11]
-    print("version: " + version.decode())
     name = header[17:21]
-    print("name: " + name.decode())
-    print(header)
-    index = header.find(' ', 0, encrypted_header_len) 
-    print(index)
+    index = 22
+    while index < len(header)- 10:
+        for i in range(10):
+            if(header[i+index] == 32):
+                break
+        allowed_user = header[index:index+i].decode()
+        # 32 + 24 + 16 + 24
+        i += 1
+        encrypted_key_nonce = header[index+i:index+i+72]
+        user_nonce = header[i+index+72:i+index+72+24]
+        print(encrypted_key_nonce)
+        print(user_nonce)
+
+        index = i + index + 72 + 24
+        if (allowed_user == username):
+            print(username)
+            user_key = gen_userkey(username, pin, salt, name.decode(), version.decode())
+            game_key_nonce = decrypt(user_key, user_nonce, encrypted_key_nonce)
+            game_key = game_key_nonce[:32]
+            game_nonce = game_key_nonce[32:]
+            decrypted_game = decrypt(game_key, game_nonce, ciphertext)
+            file_name = name.decode() + version.decode() + username
+            f = open(file_name, 'wb')
+            f.write(decrypted_game)
+            f.close()
+            
+
     '''
     name = header_data[1][5:]
     user = header_data[2].split()
