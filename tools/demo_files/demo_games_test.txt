@@ -1,2 +1,2 @@
-demo_files/2048 2048 1.0 user1 demo
-demo_files/2048 2048 1.1 user1 user demo
+/home/ubuntu/2019-ectf-cmucode/tools/2048-v1.0 2048 1.0 user1 demo
+/home/ubuntu/2019-ectf-cmucode/tools/2048-v1.1 2048 1.1 user1 user demo
