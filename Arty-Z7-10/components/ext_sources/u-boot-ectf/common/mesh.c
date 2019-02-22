@@ -13,6 +13,7 @@
 #include <mesh.h>
 #include <mesh_users.h>
 #include <default_games.h>
+#include <bcrypt.h>
 
 #define MESH_TOK_BUFSIZE 64
 #define MESH_TOK_DELIM " \t\r\n\a"
@@ -28,6 +29,8 @@
 
 // declare user global
 User user;
+struct games_tbl_row *installed_games;
+unsigned int installed_games_size = 0;
 
 /*
     List of builtin commands, followed by their corresponding functions.
@@ -79,10 +82,10 @@ int mesh_init_table(void)
     {
         unsigned int sentinel_value = MESH_SENTINEL_VALUE;
         mesh_flash_write(&sentinel_value, MESH_SENTINEL_LOCATION, MESH_SENTINEL_LENGTH);
-        unsigned int tend = MESH_TABLE_END;
+        installed_games_size = 0;
 
-        // write table end
-        mesh_flash_write(&tend, MESH_INSTALL_GAME_OFFSET, sizeof(char));
+        // set the number of installed games to 0
+        mesh_flash_write(&installed_games_size, MESH_INSTALL_GAME_OFFSET, sizeof(unsigned int));
         ret = 0;
     }
     free(sentinel);
@@ -290,18 +293,16 @@ int mesh_logout(char **args)
 */
 int mesh_list(char **args)
 {
-    struct games_tbl_row row;
-    unsigned int offset = MESH_INSTALL_GAME_OFFSET;
+    struct games_tbl_row *row;
+    unsigned int index = 0;
 
     // loop through install table untill end of table is found.
-    for(mesh_flash_read(&row, offset, sizeof(struct games_tbl_row));
-        row.install_flag != MESH_TABLE_END;
-        mesh_flash_read(&row, offset, sizeof(struct games_tbl_row)))
+    for(; index < installed_games_size; index++)
     {
+        row = &installed_games[index];
         // print the game if it is found.
-        if (strcmp(row.user_name, user.name) == 0 && row.install_flag == MESH_TABLE_INSTALLED)
-            printf("%s-v%d.%d\n", row.game_name, row.major_version, row.minor_version);
-        offset += sizeof(struct games_tbl_row);
+        if (strcmp(row->user_name, user.name) == 0 && row->install_flag == MESH_TABLE_INSTALLED)
+            printf("%s-v%d.%d\n", row->game_name, row->major_version, row->minor_version);
     }
 
     return 0;
@@ -359,8 +360,7 @@ int mesh_play(char **args)
 }
 
 /*
-    This function lists all games that are installed for the specified user.
-    It implements the mesh shell query function.
+    This function lists all games that are on the sd card that are available for installation
 */
 int mesh_query(char **args)
 {
@@ -419,33 +419,37 @@ int mesh_install(char **args)
 
     printf("Installing game %s for %s...\n", row.game_name, row.user_name);
 
+    unsigned int index = 0;
+    struct games_tbl_row *next;
 
-    // Get the initial offset into the games table
-    unsigned int offset = MESH_INSTALL_GAME_OFFSET;
-    // Flag for if this row is in use
-
-    struct games_tbl_row flash_row;
-    // Find the end of the table
-    for(mesh_flash_read(&flash_row, offset, sizeof(struct games_tbl_row));
-        flash_row.install_flag != MESH_TABLE_END;
-        mesh_flash_read(&flash_row, offset, sizeof(struct games_tbl_row)))
-    {
-        offset += sizeof(struct games_tbl_row);
+    // look for the game in either a lower version or uninstalled
+    for (; index < installed_games_size; index++) {
+        next = &installed_games[index];
+        if (strcmp(next->game_name, row.game_name) == 0 &&
+            strcmp(next->user_name, row.user_name) == 0)
+        {
+            if (next->major_version < row.major_version ||
+                (next->major_version == row.major_version && 
+                next->minor_version < row.minor_version))
+            {
+                printf("Upgrading game %s for %s from version %u.%u to %u.%u...\n", row.game_name, row.user_name, 
+                                                                                      next->major_version, next->minor_version,
+                                                                                      row.major_version, row.minor_version);
+            }
+            memcpy(next, &row, sizeof(struct games_tbl_row));
+            mesh_flash_write(next, sizeof(unsigned int) + MESH_INSTALL_GAME_OFFSET + index * sizeof(struct games_tbl_row), sizeof(struct games_tbl_row));
+            return 0;
+        }
     }
 
-    // Write this row at the specified offset
-    mesh_flash_write(&row, offset, sizeof(struct games_tbl_row));
-    // Now we need to potentially signal the end of the table
-    // I say potentially because it's possible that we wrote over a game
-    // that was uninstalled, in which case we don't need to write the end of
-    // the table since we can assume that it's already there
+    // if the game was not found then we need to add it to the end of the table
 
-    // Increase the offset to past this row
-    offset += sizeof(struct games_tbl_row);
+    installed_games = realloc(installed_games, sizeof(struct games_tbl_row) * ++installed_games_size);
+    memcpy(&installed_games[installed_games_size - 1], &row, sizeof(struct games_tbl_row));
 
-    // Write the end of the table
-    char end = MESH_TABLE_END;
-    mesh_flash_write(&end, offset, sizeof(char));
+    // write the size and table to flash
+    mesh_flash_write(&installed_games_size, MESH_INSTALL_GAME_OFFSET, sizeof(unsigned int));
+    mesh_flash_write(&installed_games[installed_games_size - 1], sizeof(unsigned int) + MESH_INSTALL_GAME_OFFSET + index * sizeof(struct games_tbl_row), sizeof(struct games_tbl_row));
 
     printf("%s was successfully installed for %s\n", row.game_name, row.user_name);
     return 0;
@@ -466,30 +470,28 @@ int mesh_uninstall(char **args)
         return 0;
     }
 
-    struct games_tbl_row row;
-    unsigned int offset = MESH_INSTALL_GAME_OFFSET;
+    struct games_tbl_row *row;
+    unsigned int index = 0;
 
     printf("Uninstalling %s for %s...\n", args[1], user.name);
-    for(mesh_flash_read(&row, offset, sizeof(struct games_tbl_row));
-        row.install_flag != MESH_TABLE_END;
-        mesh_flash_read(&row, offset, sizeof(struct games_tbl_row)))
+    for(; index < installed_games_size; index++)
     {
+        row = &installed_games[index];
         // the most space that we could need to store the full game name
-        char* full_name = (char*) malloc(snprintf(NULL, 0, "%s-v%d.%d", row.game_name, row.major_version, row.minor_version) + 1);
-        full_name_from_short_name(full_name, &row);
+        char* full_name = (char*) malloc(snprintf(NULL, 0, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version) + 1);
+        full_name_from_short_name(full_name, row);
 
-        if (strcmp(row.user_name, user.name) == 0 &&
+        if (strcmp(row->user_name, user.name) == 0 &&
             strcmp(full_name, args[1]) == 0 &&
-            row.install_flag == MESH_TABLE_INSTALLED)
+            row->install_flag == MESH_TABLE_INSTALLED)
         {
-            row.install_flag = MESH_TABLE_UNINSTALLED;
-            mesh_flash_write(&row, offset, sizeof(struct games_tbl_row));
+            row->install_flag = MESH_TABLE_UNINSTALLED;
+            mesh_flash_write(row, sizeof(unsigned int) + MESH_INSTALL_GAME_OFFSET + index * sizeof(struct games_tbl_row), sizeof(struct games_tbl_row));
             printf("%s was successfully uninstalled for %s\n", args[1], user.name);
             free(full_name);
             break;
         }
         free(full_name);
-        offset += sizeof(struct games_tbl_row);
     }
 
     return 0;
@@ -560,6 +562,7 @@ void mesh_loop(void) {
     char *line;
     char **args;
     int status = 1;
+    int login_count = 0;
 
     memset(user.name, 0, MAX_STR_LEN);
     memset(user.pin, 0, MAX_STR_LEN);
@@ -572,18 +575,20 @@ void mesh_loop(void) {
         mesh_init_table();
         printf("Done!\n");
     }
+    mesh_get_install_table();
+
+
 
 
     // Perform first time initialization to ensure that the default
     // games are present
     strncpy(user.name, "demo", 5);
-    strncpy(user.pin, "00000000", 9);
 
     for(int i = 0; i < NUM_DEFAULT_GAMES; ++i)
     {
         char* install_args[] = {"install", default_games[i], '\0'};
         int ret_code = mesh_install(install_args);
-        if (ret_code != 0 && ret_code != 5 && ret_code != 6)
+        if (ret_code != 0 && ret_code != 6 && ret_code != 7)
         {
             printf("Error detected while installing default games\n");
             while(1);
@@ -591,12 +596,17 @@ void mesh_loop(void) {
     }
 
     memset(user.name, 0, MAX_STR_LEN);
-    memset(user.pin, 0, MAX_STR_LEN);
 
     while(1)
     {
-        if (mesh_login(&user))
+        if (mesh_login(&user)) {
+            if (++login_count >= MAX_LOGIN_ATTEMPTS) {
+                printf("Exceeded maximum login limit. Please try again in 5-seconds ... \n");
+                mdelay(LOGIN_TIMEOUT); 
+            }
             continue;
+        }
+        login_count = 0;
 
         while(*(user.name)) {
             line = mesh_input(CONFIG_SYS_PROMPT);
@@ -857,30 +867,28 @@ void full_name_from_short_name(char* full_name, struct games_tbl_row* row)
 
 /*
     This function determines if the specified game is installed for the given
-    user. It return 1 if it is installed and 0 if it isnt.
+    user at the same version. It returns 1 if it is installed and 0 if it isnt.
 */
 int mesh_game_installed(char *game_name){
-    struct games_tbl_row row;
-    unsigned int offset = MESH_INSTALL_GAME_OFFSET;
+    struct games_tbl_row *row;
+    unsigned int index = 0;
 
     // loop through install table until table end is found
-    for(mesh_flash_read(&row, offset, sizeof(struct games_tbl_row));
-        row.install_flag != MESH_TABLE_END;
-        mesh_flash_read(&row, offset, sizeof(struct games_tbl_row)))
+    for(; index < installed_games_size; index++)
     {
+        row = &installed_games[index];
         // the most space that we could need to store the full game name
-        char* full_name = (char*) malloc(snprintf(NULL, 0, "%s-v%d.%d", row.game_name, row.major_version, row.minor_version) + 1);
-        full_name_from_short_name(full_name, &row);
+        char* full_name = (char*) malloc(snprintf(NULL, 0, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version) + 1);
+        full_name_from_short_name(full_name, row);
         // check if game is installed and if it is for the specified user.
         if (strcmp(game_name, full_name) == 0 &&
-            strcmp(user.name, row.user_name) == 0 &&
-            row.install_flag == MESH_TABLE_INSTALLED)
+            strcmp(user.name, row->user_name) == 0 &&
+            row->install_flag == MESH_TABLE_INSTALLED)
         {
             free(full_name);
             return 1;
         }
         free(full_name);
-        offset += sizeof(struct games_tbl_row);
     }
 
     return 0;
@@ -950,18 +958,15 @@ int mesh_check_user(Game *game)
 */
 int mesh_check_downgrade(char *game_name, unsigned int major_version, unsigned int minor_version)
 {
-    struct games_tbl_row row;
-    unsigned int offset = MESH_INSTALL_GAME_OFFSET;
+    struct games_tbl_row *row;
+    unsigned int index = 0;
     int return_value = 0;
 
-    for(mesh_flash_read(&row, offset, sizeof(struct games_tbl_row));
-        row.install_flag != MESH_TABLE_END;
-        mesh_flash_read(&row, offset, sizeof(struct games_tbl_row)))
+    for(; index < installed_games_size; index++)
     {
-        offset += sizeof(struct games_tbl_row);
-
+        row = &installed_games[index];
         // Ignore anyone that isn't the current user
-        if (strcmp(user.name, row.user_name) != 0)
+        if (strcmp(user.name, row->user_name) != 0)
             continue;
 
         // ignore it if it doesn't have the same game name
@@ -969,25 +974,25 @@ int mesh_check_downgrade(char *game_name, unsigned int major_version, unsigned i
         char short_game_name[MAX_GAME_LENGTH + 1] = "";
         strncpy(short_game_name, game_name, MAX_GAME_LENGTH);
         strtok(short_game_name, "-");
-        if (strcmp(short_game_name, row.game_name) != 0)
+        if (strcmp(short_game_name, row->game_name) != 0)
             continue;
 
         // Fail if the major version of the new game is less than the currently
         // installed game
-        if (major_version < row.major_version)
+        if (major_version < row->major_version)
         {
             return_value = 1;
         }
         // Fail if the major version of the new game is the same and the minor
         // version is less or the same
-        else if (major_version == row.major_version && minor_version < row.minor_version)
+        else if (major_version == row->major_version && minor_version < row->minor_version)
         {
             return_value = 1;
         }
         // prevent a reinstall of the same version without an uninstall
-        else if (major_version == row.major_version &&
-            minor_version == row.minor_version &&
-            row.install_flag == MESH_TABLE_INSTALLED)
+        else if (major_version == row->major_version &&
+            minor_version == row->minor_version &&
+            row->install_flag == MESH_TABLE_INSTALLED)
         {
             return_value = return_value == 1 ? return_value : 2;
         }
@@ -1087,6 +1092,9 @@ int mesh_valid_install(char *game_name){
     if (mesh_check_downgrade(game_name, game.major_version, game.minor_version)){
         return 3;
     }
+    if (installed_games_size == MAX_GAMES_INSTALLED) {
+        return 5;
+    }
 
     return 0;
 }
@@ -1127,16 +1135,19 @@ int mesh_install_validate_args(char **args){
             break;
         case 1 :
             printf("Error installing %s, the game does not exist on the SD card games partition.\n", game_name);
-            return 3;
+            return 4;
         case 2 :
             printf("Error installing %s, %s is not allowed to install this game.\n", game_name, user.name);
-            return 4;
+            return 5;
         case 3 :
             printf("Error installing %s, downgrade not allowed. Later version is already installed.\n", game_name);
-            return 5;
+            return 6;
         case 4 :
             printf("Skipping install of %s, game is already installed.\n", game_name);
-            return 6;
+            return 7;
+        case 5 :
+            printf("No more games can be installed\n");
+            return 8;
         default :
             printf("Unknown error installing game.\n");
             return -1;
@@ -1220,11 +1231,18 @@ int mesh_validate_user(User *user)
     for (int i = 0; i < NUM_MESH_USERS; ++i)
     {
         if (strcmp(mesh_users[i].username, user->name) == 0 &&
-            strcmp(mesh_users[i].pin, user->pin) == 0)
+            bcrypt_checkpass(user->pin, mesh_users[i].hash) == 0)
         {
-            return 0;
+            if (bcrypt_checkpass(user->pin, mesh_users[i].hash) == 0) {
+                return 0;
+            }
+            else {
+                return 1;
+            }
         }
     }
+    // run bcrypt even if no 
+    bcrypt_checkpass(user->pin, default_hash);
     return 1;
 }
 
@@ -1340,6 +1358,23 @@ char* mesh_input(char* prompt)
 }
 
 /*
+    Get all of the installed games from flash and place them in RAM
+*/
+void mesh_get_install_table()
+{
+    mesh_flash_read(&installed_games_size, MESH_INSTALL_GAME_OFFSET, sizeof(unsigned int));
+
+    // there cannot be more than MAX_GAMES installed so when that happens we know that an attack has occured
+    if (installed_games_size > MAX_GAMES_INSTALLED) {
+        installed_games_size = 0;
+    }
+
+    installed_games = malloc(sizeof(struct games_tbl_row) * installed_games_size);
+    mesh_flash_read(&installed_games, MESH_INSTALL_GAME_OFFSET + sizeof(unsigned int), sizeof(struct games_tbl_row) * installed_games_size);
+
+}
+
+/*
     This function handles logging in a user. It prompts for a username and pin.
     If a valid user pin combo is read, it writes the name and pin to the user
     struct and returns 0, otherwise, it returns an error code
@@ -1351,7 +1386,6 @@ int mesh_login(User *user) {
     int retval;
 
     memset(user->name, 0, MAX_USERNAME_LENGTH + 1);
-    memset(user->pin, 0, MAX_PIN_LENGTH + 1);
 
     do {
         tmp_name = mesh_input("Enter your username: ");
@@ -1368,7 +1402,6 @@ int mesh_login(User *user) {
     retval = mesh_validate_user(&tmp_user);
     if (!retval) {
         strncpy(user->name, tmp_user.name, MAX_USERNAME_LENGTH);
-        strncpy(user->pin, tmp_user.pin, MAX_PIN_LENGTH);
     } else {
         printf("Login failed. Please try again\n");
     }
