@@ -45,27 +45,30 @@ def encrypt_game(game, gamekey, gamenonce):
     encrypted_game = pysodium.crypto_secretbox(gamebin, gamenonce, gamekey)
     return encrypted_game
 
-def encrypt_header(users, name, version, game_users, gamekey, gamenonce, header_key, header_nonce):
+def encrypt_header(user_array, name, version, game_users, gamekey, gamenonce, header_key, header_nonce):
     header = bytes("version:%s\n" % (version), "utf-8")
     header += bytes("name:%s\n" % (name), "utf-8")
     for user in game_users:
         # find the user data
         found = False
-        for user_data in users:
+        for user_data in user_array:
             if user == user_data[0]:
                 found = True
                 break
         if found:
             username = user_data[0]
             user_pin = user_data[1]
-            user_salt = base64.b64decode(user_data[2])
+            user_salt = user_data[2]
             user_key = gen_userkey(username, user_pin, user_salt, name, version)
             encrypted_gamekey, user_nonce = encrypt_game_key(user_key, gamekey, gamenonce)
-            header += bytes(user + ' ')
+            header += user.encode()
+            header += ' '.encode()
             header += encrypted_gamekey + user_nonce
     encrypted_header = encrypt(header_key, header_nonce, header)
-    # append len 
+    # append len i
+    print(header)
     header_len = pack('Q', len(encrypted_header))
+    print(header_len)
     encrypted_header = header_len + encrypted_header
     return encrypted_header
 
@@ -96,7 +99,7 @@ def provision_game(line, user_array, header_key, header_nonce, sk):
     # Game version
     version = m.group(3)
     # List of users (strings) that are allowed to play this game
-    users = m.group(4).split()
+    game_users = m.group(4).split()
 
     # Open the path to the games in binary mode
     # try:
@@ -127,7 +130,7 @@ def provision_game(line, user_array, header_key, header_nonce, sk):
     # users:drew ben lou hunter 
 
     (gamekey, gamenonce) = gen_key_nonce()
-    encrypted_header = encrypt_header(users, name, version, users, gamekey, gamenonce, header_key, header_nonce)
+    encrypted_header = encrypt_header(user_array, name, version, game_users, gamekey, gamenonce, header_key, header_nonce)
     encrypted_game = encrypt_game(line, gamekey, gamenonce)
     header_game = encrypted_header + encrypted_game
     signed_file = sign(header_game, sk)

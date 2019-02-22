@@ -197,30 +197,33 @@ def full_game_encrypt_test():
 
 
 def verify_everything(gamepath, pk, username, pin, salt, header_key, header_nonce, sk):
-    print(gamepath)
-    print(pk)
+    # print("" + ''.join('\\x{:02x}'.format(x) for x in pk) + "")
     game_file = open(gamepath, 'rb')
     game = game_file.read()
     game_file.close()
 
-    s = sign(game, sk)
+    #s = sign(game, sk)
 
     # verify sig for entire file
-    file_buf = verify_signature(s, pk)
+    file_buf = verify_signature(game, pk)
     # split
     encrypted_header_len = unpack('Q', file_buf[:8])[0]
     # decrypt header
-
+ 	 
+    #print("" + ''.join('\\x{:02x}'.format(x) for x in file_buf) + "")
+    print(encrypted_header_len)
     encrypted_header = file_buf[8:(encrypted_header_len+8)]
     ciphertext = file_buf[encrypted_header_len+8:]
     header = decrypt(header_key, header_nonce, encrypted_header)
-    header = header.decode('utf-8')
-    # print(header)
-    header_data = header.splitlines()
-    print(header_data)
-    version = header_data[0][8:]
-
-    # print("version: " + version)
+    #header = header.decode('utf-8')
+    print(header)
+    version = header[8:11]
+    print("version: " + version.decode())
+    name = header[17:21]
+    print("name: " + name.decode())
+    print(header)
+    index = header.find(' ', 0, encrypted_header_len) 
+    print(index)
     '''
     name = header_data[1][5:]
     user = header_data[2].split()
@@ -259,7 +262,11 @@ def gen_userkey_test():
     #userkeyout_file.close()
 
 def new_full_game_decrypt_test():
-    pk = '\x64\xc8\x2a\xf2\x54\x83\xff\x15\x32\x31\xf9\x29\xf2\x34\xfc\x1e\xdb\x85\xcb\xb1\xf8\xba\xbb\xf9\xb6\x98\x68\xf8\xa0\x96\x6c\x76'
+    f = open("pk.out", "rb")
+    pk = f.read()
+    f.close()
+    print(type(pk))
+    print("" + ''.join('\\x{:02x}'.format(x) for x in pk) + "")
     f = open("demo_files/demo_games_test.txt", 'r')
     array = []
     for line in f:
@@ -270,6 +277,7 @@ def new_full_game_decrypt_test():
     print(array)
     user_array, header_key, header_nonce, sk = load_factory_secrets()
     #print(user_array)
+    sk = open("sk.out", 'rb').read()
 
     for game in array:
         print(game)
@@ -281,7 +289,7 @@ def new_full_game_decrypt_test():
                 verify_everything(game[0], pk, username, pin, salt, header_key, header_nonce, sk)
 
 def load_factory_secrets():
-    f = open('FactorySecrets.txt', 'r');
+    f = open('files/generated/FactorySecrets.txt', 'r');
     lines = [line.rstrip('\n') for line in f]
     f.close()
     sk = lines[-1]
