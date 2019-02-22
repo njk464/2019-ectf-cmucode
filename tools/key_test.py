@@ -195,28 +195,40 @@ def full_game_encrypt_test():
     out_file.write(encrypted_game)
     out_file.close()
 
-def verify_everything(game, pk, pin, salt, key, nonce):
+
+def verify_everything(gamepath, pk, username, pin, salt, header_key, header_nonce, sk):
+    print(gamepath)
+    print(pk)
+    game_file = open(gamepath, 'rb')
+    game = game_file.read()
+    game_file.close()
+
+    s = sign(game, sk)
+
     # verify sig for entire file
-    file_buf = verify_signature(game, pk)
+    file_buf = verify_signature(s, pk)
     # split
     encrypted_header_len = unpack('Q', file_buf[:8])[0]
     # decrypt header
 
     encrypted_header = file_buf[8:(encrypted_header_len+8)]
     ciphertext = file_buf[encrypted_header_len+8:]
-    header = decrypt(key, nonce, encrypted_header)
+    header = decrypt(header_key, header_nonce, encrypted_header)
     header = header.decode('utf-8')
     # print(header)
     header_data = header.splitlines()
+    print(header_data)
     version = header_data[0][8:]
+
     # print("version: " + version)
+    '''
     name = header_data[1][5:]
     user = header_data[2].split()
     user_name = user[0][6:]
     print(user_name)
     enc_game_key_nonce = base64.b64decode(user[1][1:])
     # print("Gamekeynonce: " + str(enc_game_key_nonce))
-    user_nonce = base64.b64decode(user[2][1:])    
+    user_nonce = base64.b64decode(user[2][1:])
     # print("user_nonce: " + str(user_nonce))
     userkey = gen_userkey(user_name, pin, salt, name, version)
     game_key_nonce = decrypt(userkey, user_nonce, enc_game_key_nonce)
@@ -231,6 +243,7 @@ def verify_everything(game, pk, pin, salt, key, nonce):
     f = open("out.out", 'wb')
     f.write(decrypted_game)
     f.close()
+    '''
     print("Successful")
 
 # Function is used to generate a key passed on user data
@@ -245,9 +258,70 @@ def gen_userkey_test():
     #userkeyout_file.write(userkey)
     #userkeyout_file.close()
 
+def new_full_game_decrypt_test():
+    pk = '\x64\xc8\x2a\xf2\x54\x83\xff\x15\x32\x31\xf9\x29\xf2\x34\xfc\x1e\xdb\x85\xcb\xb1\xf8\xba\xbb\xf9\xb6\x98\x68\xf8\xa0\x96\x6c\x76'
+    f = open("demo_files/demo_games_test.txt", 'r')
+    array = []
+    for line in f:
+        print(line)
+        if(line != ''):
+            game_path, name, version, users = load_game_txt(line)
+            array.append([game_path, name, version, users])
+    print(array)
+    user_array, header_key, header_nonce, sk = load_factory_secrets()
+    #print(user_array)
+
+    for game in array:
+        print(game)
+        for user in user_array:
+            username = user[0]
+            if username in game[3]:
+                pin = user[1]
+                salt = user[2]
+                verify_everything(game[0], pk, username, pin, salt, header_key, header_nonce, sk)
+
+def load_factory_secrets():
+    f = open('FactorySecrets.txt', 'r');
+    lines = [line.rstrip('\n') for line in f]
+    f.close()
+    sk = lines[-1]
+    sk = base64.b64decode(sk)
+    header_nonce = lines[-2]
+    header_nonce = base64.b64decode(header_nonce)
+    header_key = lines[-3]
+    header_key = base64.b64decode(header_key)
+    array = []
+    for user in lines[:-3]:
+        array.append(user.split(' '))
+    for user in array:
+        user[2] = base64.b64decode(user[2])
+
+    return array, header_key, header_nonce, sk
+
+def load_game_txt(line):
+    reg = r'^\s*([\w\/\-.\_]+)\s+([\w\-.\_]+)\s+(\d+\.\d+|\d+)((?:\s+\w+)+)'
+    m = re.match(reg, line)
+    if not m:
+        return
+    # Path to the game
+    g_path = m.group(1)
+    # Name of the game
+    name = m.group(2)
+    # Game version
+    version = m.group(3)
+    # List of users (strings) that are allowed to play this game
+    users = m.group(4).split()
+    # get list of games
+    # get list of users
+    # read ing stuff 
+    return g_path, name, version, users
+
+
+
 if __name__ == "__main__":
     #full_game_encrypt_test()
-    gen_userkey_test()
+    #gen_userkey_test()
+    new_full_game_decrypt_test()
     # pk_file = open('pk.out', 'wb')
     # pk, sk = gen_keypair()
     # pk_file.write(pk)
