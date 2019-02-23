@@ -1,3 +1,10 @@
+// TODO: remove after testing
+#include <stdint.h>
+#include <string.h>
+#include <stddef.h>
+#include <limits.h>
+#include <stdlib.h>
+
 #define __attribute__(a)
 
 #define COMPILER_ASSERT(X) (void) sizeof(char[(X) ? 1 : -1])
@@ -132,4 +139,5 @@ int crypto_sign_open(unsigned char *m, unsigned long long *mlen_p,
 
 int crypto_hash_sha256(unsigned char *out, const unsigned char *in, 
                        unsigned long long inlen);
+
 int sodium_init();
