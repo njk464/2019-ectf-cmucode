@@ -18,7 +18,9 @@ def gen_key_nonce():
 
 def gen_userkey(user, pin, salt, game_name, version):
     password = user.encode() + pin.encode() + game_name.encode() + version.encode() + salt
-    key = pysodium.crypto_hash_sha256(password)
+    # key = pysodium.crypto_hash_sha256(password)
+    key = pysodium.crypto_hash_sha512(password)
+    key = key[:32]
     return key
 
 def sign(message, sk):
