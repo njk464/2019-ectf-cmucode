@@ -1,4 +1,3 @@
-#include <linux/types.h>
 #include <linux/string.h>
 #include <sodium.h>
 #include <linux/ctype.h>
@@ -22,11 +21,6 @@ crypto_secretbox_xsalsa20poly1305_open(unsigned char *m, const unsigned char *c,
                                        unsigned long long clen,
                                        const unsigned char *n,
                                        const unsigned char *k);
-int
-crypto_secretbox(unsigned char *c, const unsigned char *m,
-                 unsigned long long mlen, const unsigned char *n,
-                 const unsigned char *k);
-
 int
 crypto_secretbox_open(unsigned char *m, const unsigned char *c,
                       unsigned long long clen, const unsigned char *n,
@@ -2396,5 +2390,8 @@ crypto_sign_open(unsigned char *m, unsigned long long *mlen_p,
     return crypto_sign_ed25519_open(m, mlen_p, sm, smlen, pk);
 }
 
-
+int
+sodium_init() {
+  return 1;
+}
 

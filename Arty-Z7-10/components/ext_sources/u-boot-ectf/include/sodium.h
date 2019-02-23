@@ -6,6 +6,12 @@
 
 #define U32_STR_MAXSIZE 11U
 
+#define crypto_secretbox_NONCEBYTES 24U
+#define crypto_secretbox_KEYBYTES 32U
+#define crypto_secretbox_MACBYTES 16U
+#define crypto_secretbox_ZEROBYTES 32U
+#define crypto_secretbox_BOXZEROBYTES 16U
+
 # define POLY1305_NOINLINE __attribute__((noinline))
 
 #define poly1305_block_size 16
@@ -101,6 +107,11 @@ typedef struct poly1305_state_internal_t {
     unsigned char      buffer[poly1305_block_size];
     unsigned char      final;
 } poly1305_state_internal_t;
+int
+crypto_secretbox(unsigned char *c, const unsigned char *m,
+                 unsigned long long mlen, const unsigned char *n,
+                 const unsigned char *k);
+
 
 int crypto_secretbox_open(unsigned char *m, const unsigned char *c,
                           unsigned long long clen, const unsigned char *n,
@@ -115,3 +126,5 @@ int crypto_sign_open(unsigned char *m, unsigned long long *mlen_p,
                      const unsigned char *pk)
             __attribute__ ((warn_unused_result)) __attribute__ ((nonnull(3, 5)));
 
+
+int sodium_init();

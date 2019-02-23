@@ -4129,8 +4129,8 @@ CONFIG_uioctl=y
 #
 # user packages 
 #
+CONFIG_libsodium=y
 
 #
 # PetaLinux RootFS Settings
 #
-CONFIG_ROOTFS_ROOT_PASSWD="eCTF-cmu-temporary-root-passwd"

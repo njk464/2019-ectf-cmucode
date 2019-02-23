@@ -1369,9 +1369,12 @@ void mesh_get_install_table()
         installed_games_size = 0;
     }
 
-    installed_games = malloc(sizeof(struct games_tbl_row) * installed_games_size);
-    mesh_flash_read(&installed_games, MESH_INSTALL_GAME_OFFSET + sizeof(unsigned int), sizeof(struct games_tbl_row) * installed_games_size);
-
+    if (installed_games_size > 0) {
+        installed_games = malloc(sizeof(struct games_tbl_row) * installed_games_size);
+        mesh_flash_read( installed_games,
+                         MESH_INSTALL_GAME_OFFSET + sizeof(unsigned int), 
+                         sizeof(struct games_tbl_row) * installed_games_size);
+    }
 }
 
 /*
