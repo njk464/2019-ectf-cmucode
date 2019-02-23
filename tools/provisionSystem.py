@@ -30,7 +30,7 @@ def validate_users(lines):
     for line in lines:
         for m in [re.match(reg, line)]:
             if m:
-                hashed_pass = bcrypt.hashpw(m.group(2).encode('utf-8'), bcrypt.gensalt(rounds=8)).decode("utf-8")
+                hashed_pass = bcrypt.hashpw(m.group(2).encode('utf-8'), bcrypt.gensalt(rounds=12)).decode("utf-8")
                 users.append((m.group(1), hashed_pass))
 
     # return a list of tuples of (username, hashed_pin)
@@ -230,7 +230,7 @@ def main():
             exit(2)
 
     # Add the demo user, which must always exist, per the rules
-    demo_hash = bcrypt.hashpw("00000000".encode('utf-8'), bcrypt.gensalt(rounds=8)).decode("utf-8")
+    demo_hash = bcrypt.hashpw("00000000".encode('utf-8'), bcrypt.gensalt(rounds=12)).decode("utf-8")
     users.append(("demo", demo_hash))
     # write mesh users to uboot header
     write_mesh_users_h(users, f_mesh_users_out)

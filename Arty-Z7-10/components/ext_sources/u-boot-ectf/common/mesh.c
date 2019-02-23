@@ -27,6 +27,8 @@
 #define EXIT_FAILURE 1
 #endif
 
+#define FLASH_CRYPTO_PAGE_SIZE FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES - crypto_secretbox_MACBYTES - crypto_secretbox_BOXZEROBYTES
+
 // declare user global
 User user;
 struct games_tbl_row *installed_games;
@@ -77,17 +79,14 @@ int mesh_init_table(void)
     char* sentinel = (char*) malloc(sizeof(char) * MESH_SENTINEL_LENGTH);
     int ret = 1;
 
-    mesh_flash_read(sentinel, MESH_SENTINEL_LOCATION, MESH_SENTINEL_LENGTH);
-    if (*((unsigned int*) sentinel) != MESH_SENTINEL_VALUE)
-    {
-        unsigned int sentinel_value = MESH_SENTINEL_VALUE;
-        mesh_flash_write(&sentinel_value, MESH_SENTINEL_LOCATION, MESH_SENTINEL_LENGTH);
-        installed_games_size = 0;
+    unsigned int sentinel_value = MESH_SENTINEL_VALUE;
+    mesh_flash_write(&sentinel_value, MESH_SENTINEL_LOCATION, MESH_SENTINEL_LENGTH);
+    installed_games_size = 0;
 
-        // set the number of installed games to 0
-        mesh_flash_write(&installed_games_size, MESH_INSTALL_GAME_OFFSET, sizeof(unsigned int));
-        ret = 0;
-    }
+    // set the number of installed games to 0
+    mesh_flash_crypto_write(&installed_games_size, MESH_INSTALL_GAME_OFFSET, sizeof(unsigned int));
+    ret = 0;
+
     free(sentinel);
     return ret;
 }
@@ -236,6 +235,119 @@ int mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_
     char* read_cmd[] = {"sf", "read", str_ptr, offset_ptr, length_ptr};
     return sf_tp->cmd(sf_tp, 0, 5, read_cmd);
 }
+
+/*
+    wrapper for mesh_flash_write that implements crypto
+*/
+
+int mesh_flash_crypto_write(void* data, unsigned int flash_location, unsigned int flash_length, int force_write)
+{
+    /* Write flash_length number of bytes starting at what's pointed to by data
+     * to address flash_location in flash.
+     */
+
+    if (flash_length < 1)
+        return 0;
+
+    // malloc space to hold an entire page
+    char* cipher_text = malloc(sizeof(char) * FLASH_PAGE_SIZE);
+    char* plain_text = malloc(sizeof(char) * FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
+
+
+    // Find the sf sub command, defined by u-boot
+    cmd_tbl_t* sf_tp = find_cmd("sf");
+
+
+    unsigned int new_offset = flash_location;
+    while (new_offset - flash_location < flash_length) {
+        unsigned int page_ = new_offset / FLASH_CRYPTO_PAGE_SIZE;
+
+        if (!force_write) {
+            mesh_flash_read(cipher_text, page * FLASH_PAGE_SIZE, FLASH_PAGE_SIZE);
+            // nonce is equal to the first 16 bytes of ct
+            if (crypto_secretbox_open(plain_text, &cipher_text[crypto_secretbox_NONCEBYTES], FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES, cipher_text, flash_key) == -1){
+                mesh_init_table();
+                free(ct);
+                free(pt);
+                return -1;
+            }
+            unsigned int current_offset = new_offset % (FLASH_CRYPTO_PAGE_SIZE);
+            unsigned int end_offset = FLASH_CRYPTO_PAGE_SIZE;
+            if (flash_location + flash_length - new_offset - current_offset < end_offset) {
+                end_offset = flash_location + flash_length - new_offset - current_offset;
+            }
+        }
+        memcpy(&plain_text[32], data, end_offset - current_offset);
+        //TODO:  create a random nonce here
+        // memset(ct, random_16(), 16);
+        memset(pt, 0, crypto_secretbox_ZEROBYTES);
+
+        // encrypt the data
+        crypto_secretbox(&cipher_text[16], plain_text, FLASH_CRYPTO_PAGE_SIZE, cipher_text, flash_key);
+        
+        // We need to convert things to strings since this mimics the command prompt
+        char data_ptr_str[11] = "";
+        char offset_str[11] = "";
+        char length_str[11] = "";
+
+        // Convert the pointer to a string representation (0xffffffff)
+        ptr_to_string(cipher_text, data_ptr_str);
+        ptr_to_string((void *) page_starting_address, offset_str);
+        ptr_to_string((void *) FLASH_PAGE_SIZE, length_str);
+
+        // Perform an update on this page
+        char* write_cmd[] = {"sf", "update", data_ptr_str, offset_str, length_str};
+        sf_tp->cmd(sf_tp, 0, 5, write_cmd);
+
+        new_offset += end_offset - current_offset;
+        data += end_offset - current_offset;
+    }
+    free(cipher_text);
+    free(plain_text);
+    return 0;
+}
+
+/*
+    This function reads flash_length bytes from the flash memory at flash_location
+    to the byte array data.
+*/
+int mesh_flash_crypto_read(void* data, unsigned int flash_location, unsigned int flash_length)
+{
+    /* Read "flash_length" number of bytes from "flash_location" into "data" */
+
+    if (flash_length < 1)
+        return 0;
+
+    // malloc space to hold an entire page
+    char* cipher_text = malloc(sizeof(char) * FLASH_PAGE_SIZE);
+    char* plain_text = malloc(sizeof(char) * FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
+
+
+    unsigned int new_offset = flash_location;
+    while (new_offset - flash_location < flash_length) {
+        unsigned int page_ = new_offset / FLASH_CRYPTO_PAGE_SIZE;
+        mesh_flash_read(cipher_text, page * FLASH_PAGE_SIZE, FLASH_PAGE_SIZE);
+        // nonce is equal to the first 16 bytes of ct
+        if (crypto_secretbox_open(plain_text, &cipher_text[crypto_secretbox_NONCEBYTES], FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES, cipher_text, flash_key) == -1){
+            mesh_init_table();
+            free(ct);
+            free(pt);
+            return -1;
+        }
+        unsigned int current_offset = new_offset % (FLASH_CRYPTO_PAGE_SIZE);
+        unsigned int end_offset = FLASH_CRYPTO_PAGE_SIZE;
+        if (flash_location + flash_length - new_offset - current_offset < end_offset) {
+            end_offset = flash_location + flash_length - new_offset - current_offset;
+        }
+        memcpy(data, &plain_text[32], end_offset - current_offset);
+
+        new_offset += end_offset - current_offset;
+        data += end_offset - current_offset;
+    }
+    free(cipher_text);
+    free(plain_text);
+}
+
 
 /******************************************************************************/
 /******************************** End Flash Commands **************************/
