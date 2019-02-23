@@ -1,2 +1,4 @@
 *.out
 *.xml
+Arty-Z7-10/components/ext_sources/u-boot-ectf/include/configs/platform-auto.h
+Arty-Z7-10/components/ext_sources/u-boot-ectf/include/configs/platform-top.h

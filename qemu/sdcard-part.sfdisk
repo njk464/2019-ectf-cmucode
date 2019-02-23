@@ -1,0 +1,5 @@
+# partition table of /dev/loop0
+unit: sectors
+
+/dev/sdb1 : start=     2048, size=  1048576, Id=b
+/dev/sdb2 : start=  1050624, size=  2097151, Id=83
