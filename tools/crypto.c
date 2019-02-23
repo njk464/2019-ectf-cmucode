@@ -67,22 +67,11 @@ void print_hex(unsigned char *ptr, unsigned int len) {
 }
 
 void gen_userkey(char *key, char* name, char* pin, char* game_name, char* version){
-//#define MAX_USERNAME_LENGTH 15
-//#define MAX_PIN_LENGTH 8
-//#define MAX_GAME_LENGTH 31
-//#define MAX_NUM_USERS 5
-// #define salt len 16    
-//TODO: sketch
     int MAX_PASSWORD_SIZE = strlen(name) + strlen(pin) + strlen(game_name) + strlen(version) + crypto_pwhash_SALTBYTES ; 
     char password[MAX_PASSWORD_SIZE];
-    //char salt[crypto_pwhash_SALTBYTES]; 
-    //read_from_file(salt, "salt.out", crypto_pwhash_SALTBYTES);
     memset(key, 0, crypto_hash_sha256_BYTES);
     sprintf(password, "%s%s%s%s%s", name, pin, game_name, version, get_salt(name));
-    // PASSWORD = name + pin + game_name + version
     int ret = crypto_hash_sha256(key, password, MAX_PASSWORD_SIZE);
-    //printf("The key is: ");
-    //print_hex(key, crypto_hash_sha256_BYTES);
 }
 
 // Returns valud in message
@@ -323,9 +312,6 @@ void full_decrypt_test(){
     char *signed_ciphertext;
     char user_key[crypto_secretbox_KEYBYTES];
     char user_nonce[crypto_secretbox_NONCEBYTES];
-    //char key[crypto_secretbox_KEYBYTES];
-    //char nonce[crypto_secretbox_NONCEBYTES];
-    //char pk[crypto_sign_PUBLICKEYBYTES]; 
     char gamekey[crypto_secretbox_KEYBYTES];
     char gamenonce[crypto_secretbox_NONCEBYTES];
     char encrypted_gamekeynonce[encrypted_gamekeynonce_len];
@@ -333,9 +319,6 @@ void full_decrypt_test(){
     // These vaues are ONLY for this test game 2048
     char *game_name;
     char *game_version;
-    // This will change is we stop using base64
-    char *encoded_gamekeynonce;
-    char *encoded_nonce;
     char *verified_ciphertext;
     char *encrypted_header;
     char *decrypted_header;
@@ -344,7 +327,6 @@ void full_decrypt_test(){
         printf("Error in Crypto Library\n");
         exit(0);
     }
-    // This function reads the salt in from salt.out
     gen_userkey(user_key, user, pin, name, version);
     // read the key
     //read_from_file(key, "key.out", crypto_secretbox_KEYBYTES);
