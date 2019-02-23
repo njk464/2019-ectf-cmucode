@@ -334,7 +334,7 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
         // Read in the size of the encrypted header. 
         memcpy(&encrypted_header_len, verified_ciphertext, sizeof(unsigned long long int));
         decrypted_header_len = encrypted_header_len - crypto_secretbox_MACBYTES;
-        encrypted_game_len = verified_len - encrypted_header_len - sizeof(unsigned long long int);
+        encrypted_game_len = verified_len - encrypted_header_len - sizeof(unsigned long long int) - crypto_secretbox_NONCEBYTES;
         decrypted_game_len = encrypted_game_len - crypto_secretbox_MACBYTES;
         //extract header_nonce
         memcpy(header_nonce, verified_ciphertext + sizeof(unsigned long long int), crypto_secretbox_NONCEBYTES);
