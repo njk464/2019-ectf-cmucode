@@ -54,6 +54,19 @@ def validate_users(lines):
     # return a list of tuples of (username, hashed_pin)
     return users
 
+def factory_secrets_users(lines):
+    """Validate that the users data is formatted properly and return a list
+    of tuples of users and pins.
+    TODO: Check this regular expression
+    lines: list of strings from a users.txt file with newlines removed
+    """
+    # Regular expression to ensure that there is a username and an 8 digit pin
+    reg = r'^\s*(\w+)\s+(\d{8})\s*$'
+    lines = [(m.group(1), m.group(2)) for line in lines
+             for m in [re.match(reg, line)] if m]
+
+    # return a list of tuples of (username, pin)
+    return lines
 
 def write_mesh_users_h(users, f):
     """Write user inforation to a header file
@@ -314,6 +327,8 @@ def main():
     lines = [line.rstrip('\n') for line in f_mesh_users_in]
 
     users = validate_users(lines)
+
+    secret_users = factory_secrets_users(lines)
     # parse user strings
     try:
         users = validate_users(lines)
@@ -342,7 +357,7 @@ def main():
     print("Generated SystemImage file: %s" % (os.path.join(gen_path, system_image_fn)))
 
     # write factory secrets
-    write_factory_secrets(users, f_factory_secrets, f_secret_header)
+    write_factory_secrets(secret_users, f_factory_secrets, f_secret_header)
     f_factory_secrets.close()
     f_secret_header.close()
     print("Generated FactorySecrets file: %s\nGenerated SecretHeader file: %s" % (os.path.join(gen_path, factory_secrets_fn), f_secret_header))
