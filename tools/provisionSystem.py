@@ -220,8 +220,6 @@ static char sign_public_key[] = {"""
     s += pk_bytes
     s += """};\nstatic char header_key[] = {"""
     s += header_key_bytes
-    s += "};\nstatic char header_nonce[] = {"
-    s += header_nonce_bytes
     s += "};\nstatic char salt[MAX_NUM_USERS][SALT_LENGTH] = {\n"
 
     for entry in salt_array[:-1]:
