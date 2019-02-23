@@ -224,6 +224,7 @@ int verify_user_can_play(char *username, char* pin, char* gamepath){
     char *decrypted_header;
     char *verified_ciphertext;
     char test_name[MAX_USERNAME_LENGTH];
+    char *header_nonce[crypto_secretbox_NONCEBYTES];
     // Init sodium
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
@@ -242,9 +243,11 @@ int verify_user_can_play(char *username, char* pin, char* gamepath){
         // Read in the size of the encrypted header. 
         memcpy(&encrypted_header_len, verified_ciphertext, sizeof(unsigned long long int));
         decrypted_header_len = encrypted_header_len - crypto_secretbox_MACBYTES;
+        // read in header_nonce
+        memcpy(header_nonce, verified_ciphertext + sizeof(unsigned long long int), crypto_secretbox_NONCEBYTES);
         // read only the header
         encrypted_header = safe_malloc(encrypted_header_len);
-        memcpy(encrypted_header, verified_ciphertext + sizeof(unsigned long long int), encrypted_header_len);
+        memcpy(encrypted_header, verified_ciphertext + sizeof(unsigned long long int) + crypto_secretbox_NONCEBYTES, encrypted_header_len);
         // decrypt header 
         decrypted_header = safe_malloc(decrypted_header_len); 
         decrypt(header_key, header_nonce, encrypted_header, encrypted_header_len, decrypted_header);
@@ -312,6 +315,7 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
     char *encrypted_game;
     char test_name[MAX_USERNAME_LENGTH];
     int flag = 0;
+    char *header_nonce[crypto_secretbox_NONCEBYTES];
 
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
@@ -332,9 +336,11 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
         decrypted_header_len = encrypted_header_len - crypto_secretbox_MACBYTES;
         encrypted_game_len = verified_len - encrypted_header_len - sizeof(unsigned long long int);
         decrypted_game_len = encrypted_game_len - crypto_secretbox_MACBYTES;
+        //extract header_nonce
+        memcpy(header_nonce, verified_ciphertext + sizeof(unsigned long long int), crypto_secretbox_NONCEBYTES);
         // split header and game
         encrypted_header = safe_malloc(encrypted_header_len);
-        memcpy(encrypted_header, verified_ciphertext + sizeof(unsigned long long int), encrypted_header_len);
+        memcpy(encrypted_header, verified_ciphertext + sizeof(unsigned long long int) + crypto_secretbox_NONCEBYTES, encrypted_header_len);
         // decrypt header 
         decrypted_header = safe_malloc(decrypted_header_len); 
         decrypt(header_key, header_nonce, encrypted_header, encrypted_header_len, decrypted_header);
