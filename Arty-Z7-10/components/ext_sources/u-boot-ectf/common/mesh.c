@@ -79,14 +79,17 @@ int mesh_init_table(void)
     char* sentinel = (char*) malloc(sizeof(char) * MESH_SENTINEL_LENGTH);
     int ret = 1;
 
-    unsigned int sentinel_value = MESH_SENTINEL_VALUE;
-    mesh_flash_write(&sentinel_value, MESH_SENTINEL_LOCATION, MESH_SENTINEL_LENGTH);
-    installed_games_size = 0;
+    ret = mesh_flash_read(sentinel, MESH_SENTINEL_LOCATION, MESH_SENTINEL_LENGTH);
+    if (ret || *((unsigned int*) sentinel) != MESH_SENTINEL_VALUE)
+    {
+        unsigned int sentinel_value = MESH_SENTINEL_VALUE;
+        mesh_flash_write(&sentinel_value, MESH_SENTINEL_LOCATION, MESH_SENTINEL_LENGTH, 1);
+        installed_games_size = 0;
 
-    // set the number of installed games to 0
-    mesh_flash_crypto_write(&installed_games_size, MESH_INSTALL_GAME_OFFSET, sizeof(unsigned int));
-    ret = 0;
-
+        // set the number of installed games to 0
+        mesh_flash_write(&installed_games_size, MESH_INSTALL_GAME_OFFSET, sizeof(unsigned int), 0);
+        ret = 0;
+    }
     free(sentinel);
     return ret;
 }
@@ -115,106 +118,12 @@ int mesh_flash_init(void)
     flash_location.
 */
 
-int mesh_flash_write(void* data, unsigned int flash_location, unsigned int flash_length)
-{
-    /* Write flash_length number of bytes starting at what's pointed to by data
-     * to address flash_location in flash.
-     */
-
-    if (flash_length < 1)
-        return 0;
-
-    // We use the "sf update" command to update flash. Under the hood, this
-    // calls out to "sf erase" and "sf write". The "sf erase" command needs
-    // to be called on erase page boundaries (size 64 KB), so we need to make
-    // sure that we only call "sf update" on those boundaries as well.
-    // Since we want to write data to arbitrary locations in flash
-    // (potentially across page boundaries) we need to break our data up so
-    // that we can write to said boundaries.
-    //
-    // To do so, we read in the whole page that we're going to write to into RAM,
-    // update (in RAM) the data, and then write the page back out.
-
-    // Determine the starting and ending pages so that we know how many pages
-    // we need to write to
-    unsigned int starting_page = flash_location / FLASH_PAGE_SIZE;
-    unsigned int ending_page = (flash_location + flash_length) / FLASH_PAGE_SIZE;
-
-    // malloc space to hold an entire page
-    char* flash_data = malloc(sizeof(char) * FLASH_PAGE_SIZE);
-
-    // Find the sf sub command, defined by u-boot
-    cmd_tbl_t* sf_tp = find_cmd("sf");
-
-    // The number of bytes that we've copied to flash so far
-    // This is so that we know when we've copied flash_length
-    // number of bytes
-    unsigned int bytes_copied = 0;
-
-    // Loop over all of the pages that our data would touch and
-    // write the modified pages
-    for(unsigned int i = starting_page; i <= ending_page; ++i)
-    {
-        // Get the address (in flash) of the page we need to write
-        unsigned int page_starting_address = i * FLASH_PAGE_SIZE;
-        // read all of the page data into a buffer
-        mesh_flash_read(flash_data, page_starting_address, FLASH_PAGE_SIZE);
-
-        // If this is the first page, we need to stop on the page boundary
-        // or once we've written the correct number of bytes specified by
-        // flash_length
-        if (i == starting_page)
-        {
-            // Copy (byte by byte) until we've either reached the end of
-            // this page, or we've copied the appropriate number of bytes
-            for (;
-                 (flash_location + bytes_copied < page_starting_address + FLASH_PAGE_SIZE) && (bytes_copied < flash_length);
-                 ++bytes_copied)
-            {
-                flash_data[(flash_location % FLASH_PAGE_SIZE) + bytes_copied] = ((char*) data)[bytes_copied];
-            }
-        }
-        // Otherwise, we either have an entire page that needs to be updated,
-        // or a partial page that we need to update. Either way, this page
-        // starts on a page bound
-        else
-        {
-            // Copy (byte by byte) until we've either reached the end of
-            // this page, or we've copied the appropriate number of bytes
-            for (unsigned int j = 0;
-                 (i * FLASH_PAGE_SIZE + j < (i + 1) * FLASH_PAGE_SIZE) && (bytes_copied < flash_length);
-                 ++j)
-            {
-                flash_data[j] = ((char*) data)[bytes_copied];
-                ++bytes_copied;
-            }
-        }
-
-        // We need to convert things to strings since this mimics the command prompt
-        char data_ptr_str[11] = "";
-        char offset_str[11] = "";
-        char length_str[11] = "";
-
-        // Convert the pointer to a string representation (0xffffffff)
-        ptr_to_string(flash_data, data_ptr_str);
-        ptr_to_string((void *) page_starting_address, offset_str);
-        ptr_to_string((void *) FLASH_PAGE_SIZE, length_str);
-
-        // Perform an update on this page
-        char* write_cmd[] = {"sf", "update", data_ptr_str, offset_str, length_str};
-        sf_tp->cmd(sf_tp, 0, 5, write_cmd);
-    }
-
-    free(flash_data);
-
-    return 0;
-}
 
 /*
     This function reads flash_length bytes from the flash memory at flash_location
     to the byte array data.
 */
-int mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_length)
+int _mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_length)
 {
     /* Read "flash_length" number of bytes from "flash_location" into "data" */
 
@@ -240,7 +149,7 @@ int mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_
     wrapper for mesh_flash_write that implements crypto
 */
 
-int mesh_flash_crypto_write(void* data, unsigned int flash_location, unsigned int flash_length, int force_write)
+int mesh_flash_write(void* data, unsigned int flash_location, unsigned int flash_length, int force_write)
 {
     /* Write flash_length number of bytes starting at what's pointed to by data
      * to address flash_location in flash.
@@ -263,7 +172,7 @@ int mesh_flash_crypto_write(void* data, unsigned int flash_location, unsigned in
         unsigned int page_ = new_offset / FLASH_CRYPTO_PAGE_SIZE;
 
         if (!force_write) {
-            mesh_flash_read(cipher_text, page * FLASH_PAGE_SIZE, FLASH_PAGE_SIZE);
+            _mesh_flash_read(cipher_text, page * FLASH_PAGE_SIZE, FLASH_PAGE_SIZE);
             // nonce is equal to the first 16 bytes of ct
             if (crypto_secretbox_open(plain_text, &cipher_text[crypto_secretbox_NONCEBYTES], FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES, cipher_text, flash_key) == -1){
                 mesh_init_table();
@@ -326,12 +235,11 @@ int mesh_flash_crypto_read(void* data, unsigned int flash_location, unsigned int
     unsigned int new_offset = flash_location;
     while (new_offset - flash_location < flash_length) {
         unsigned int page_ = new_offset / FLASH_CRYPTO_PAGE_SIZE;
-        mesh_flash_read(cipher_text, page * FLASH_PAGE_SIZE, FLASH_PAGE_SIZE);
+        _mesh_flash_read(cipher_text, page * FLASH_PAGE_SIZE, FLASH_PAGE_SIZE);
         // nonce is equal to the first 16 bytes of ct
         if (crypto_secretbox_open(plain_text, &cipher_text[crypto_secretbox_NONCEBYTES], FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES, cipher_text, flash_key) == -1){
-            mesh_init_table();
-            free(ct);
-            free(pt);
+            free(cipher_text);
+            free(plain_text);
             return -1;
         }
         unsigned int current_offset = new_offset % (FLASH_CRYPTO_PAGE_SIZE);
@@ -346,6 +254,7 @@ int mesh_flash_crypto_read(void* data, unsigned int flash_location, unsigned int
     }
     free(cipher_text);
     free(plain_text);
+    return 0;
 }
 
 
@@ -703,7 +612,7 @@ void mesh_loop(void) {
         if (ret_code != 0 && ret_code != 6 && ret_code != 7)
         {
             printf("Error detected while installing default games\n");
-            while(1);
+            return;
         }
     }
 
@@ -1319,9 +1228,9 @@ int mesh_is_first_table_write(void)
     char* sentinel = (char*) malloc(sizeof(char) * MESH_SENTINEL_LENGTH);
     int ret = 0;
 
-    mesh_flash_read(sentinel, MESH_SENTINEL_LOCATION, MESH_SENTINEL_LENGTH);
+    ret = mesh_flash_read(sentinel, MESH_SENTINEL_LOCATION, MESH_SENTINEL_LENGTH);
 
-    if (*((unsigned int*) sentinel) != MESH_SENTINEL_VALUE)
+    if (ret || *((unsigned int*) sentinel) != MESH_SENTINEL_VALUE)
     {
         ret = 1;
     }
@@ -1474,18 +1383,23 @@ char* mesh_input(char* prompt)
 */
 void mesh_get_install_table()
 {
-    mesh_flash_read(&installed_games_size, MESH_INSTALL_GAME_OFFSET, sizeof(unsigned int));
+    int ret = mesh_flash_read(&installed_games_size, MESH_INSTALL_GAME_OFFSET, sizeof(unsigned int));
 
     // there cannot be more than MAX_GAMES installed so when that happens we know that an attack has occured
-    if (installed_games_size > MAX_GAMES_INSTALLED) {
+    if (ret || installed_games_size > MAX_GAMES_INSTALLED) {
         installed_games_size = 0;
     }
 
     if (installed_games_size > 0) {
         installed_games = malloc(sizeof(struct games_tbl_row) * installed_games_size);
-        mesh_flash_read( installed_games,
+        ret = mesh_flash_read( installed_games,
                          MESH_INSTALL_GAME_OFFSET + sizeof(unsigned int), 
                          sizeof(struct games_tbl_row) * installed_games_size);
+        if (ret) {
+            installed_games_size = 0;
+            free(installed_games);
+            mesh_init_table();
+        }
     }
 }
 
