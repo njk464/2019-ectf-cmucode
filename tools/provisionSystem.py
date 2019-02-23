@@ -186,7 +186,6 @@ def write_factory_secrets(users, f, h):
     header_key, header_nonce = gen_key_nonce()
     pk, sk = gen_keypair()
     f.write(base64.b64encode(header_key).decode() + '\n')
-    f.write(base64.b64encode(header_nonce).decode() + '\n')
     f.write(base64.b64encode(sk).decode() + '\n')
 
     pk_bytes = ""
