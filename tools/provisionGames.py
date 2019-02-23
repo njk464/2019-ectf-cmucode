@@ -137,21 +137,6 @@ def provision_game(line, user_array, header_key, sk):
     signed_file = sign(header_game, sk)
     f_out.write(signed_file)
 
-    # header = bytes("version:%s\n" % (version), "utf-8")
-    # header += bytes("name:%s\n" % (name), "utf-8")
-    # for user in users:
-    #     header = bytes("users:%s\n" % (user), "utf-8")
-    # f_out.write(bytes("version:%s\n" % (version), "utf-8"))
-    # f_out.write(bytes("name:%s\n" % (name), "utf-8"))
-    # f_out.write(bytes("users:%s\n" % (" ".join(users)), "utf-8"))
-
-    # # Read in the binary source
-    # g_src = f.read()
-    # # Write the binary source
-    # while g_src:
-    #     f_out.write(g_src)
-    #     g_src = f.read()
-
     # Close the files
     f_out.close()
     # f.close()
