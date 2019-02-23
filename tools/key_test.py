@@ -196,7 +196,7 @@ def full_game_encrypt_test():
     out_file.close()
 
 
-def verify_everything(gamepath, pk, username, pin, salt, header_key, header_nonce, sk):
+def verify_everything(gamepath, pk, username, pin, salt, header_key, sk):
     # print("" + ''.join('\\x{:02x}'.format(x) for x in pk) + "")
     game_file = open(gamepath, 'rb')
     game = game_file.read()
@@ -208,11 +208,12 @@ def verify_everything(gamepath, pk, username, pin, salt, header_key, header_nonc
     file_buf = verify_signature(game, pk)
     # split
     encrypted_header_len = unpack('Q', file_buf[:8])[0]
+    header_nonce = file_buf[8:32]
     # decrypt header
     #print("" + ''.join('\\x{:02x}'.format(x) for x in file_buf) + "")
     print(encrypted_header_len)
-    encrypted_header = file_buf[8:(encrypted_header_len+8)]
-    ciphertext = file_buf[encrypted_header_len+8:]
+    encrypted_header = file_buf[32:(encrypted_header_len+32)]
+    ciphertext = file_buf[encrypted_header_len+32:]
     header = decrypt(header_key, header_nonce, encrypted_header)
     #header = header.decode('utf-8')
     print(header)
@@ -296,7 +297,7 @@ def new_full_game_decrypt_test():
             game_path, name, version, users = load_game_txt(line)
             array.append([game_path, name, version, users])
     print(array)
-    user_array, header_key, header_nonce, sk = load_factory_secrets()
+    user_array, header_key, sk = load_factory_secrets()
     #print(user_array)
     sk = open("sk.out", 'rb').read()
 
@@ -307,7 +308,7 @@ def new_full_game_decrypt_test():
             if username in game[3]:
                 pin = user[1]
                 salt = user[2]
-                verify_everything(game[0], pk, username, pin, salt, header_key, header_nonce, sk)
+                verify_everything(game[0], pk, username, pin, salt, header_key, sk)
 
 def load_factory_secrets():
     f = open('files/generated/FactorySecrets.txt', 'r');
@@ -315,17 +316,15 @@ def load_factory_secrets():
     f.close()
     sk = lines[-1]
     sk = base64.b64decode(sk)
-    header_nonce = lines[-2]
-    header_nonce = base64.b64decode(header_nonce)
-    header_key = lines[-3]
+    header_key = lines[-2]
     header_key = base64.b64decode(header_key)
     array = []
-    for user in lines[:-3]:
+    for user in lines[:-2]:
         array.append(user.split(' '))
     for user in array:
         user[2] = base64.b64decode(user[2])
 
-    return array, header_key, header_nonce, sk
+    return array, header_key, sk
 
 def load_game_txt(line):
     reg = r'^\s*([\w\/\-.\_]+)\s+([\w\-.\_]+)\s+(\d+\.\d+|\d+)((?:\s+\w+)+)'
