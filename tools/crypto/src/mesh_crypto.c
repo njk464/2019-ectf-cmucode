@@ -1,19 +1,8 @@
-#include <sodium.h>
+//#include <sodium.h>
 #include <stdio.h>
 #include <string.h>
-#include "../Arty-Z7-10/components/ext_sources/u-boot-ectf/include/secret.h"
-/*
-#include "libsodium.h"
-
-#define crypto_pwhash_SALTBYTES 16U
-#define crypto_pwhash_OPSLIMIT_MIN 1U
-#define crypto_pwhash_MEMLIMIT_MIN 8192U
-#define crypto_pwhash_ALG_DEFAULT 2U
-#define crypto_secretbox_BOXZEROBYTES 16U
-#define crypto_secretbox_NONCEBYTES 24U
-#define crypto_secretbox_KEYBYTES 32U
-#define crypto_sign_PUBLICKEYBYTES 32U
-*/
+#include <sodium.h>
+#include <secret.h>
 
 /*
  * @brief Used to learn the length of a file
@@ -419,7 +408,7 @@ int main(){
     // Static variables to pass in as tests 
     char *username = "user";
     char *pin = "56781234";
-    char *gamepath = "2048-v1.1";
+    char *gamepath = "../2048-v1.1";
     if(verify_user_can_play(username, pin, gamepath)){
         printf("User can play\n");
         decrypt_game_file(username, pin, gamepath);
