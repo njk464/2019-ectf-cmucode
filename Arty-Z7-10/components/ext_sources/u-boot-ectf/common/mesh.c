@@ -14,6 +14,7 @@
 #include <mesh_users.h>
 #include <default_games.h>
 #include <bcrypt.h>
+#include <mesh_crypto.h>
 
 #define MESH_TOK_BUFSIZE 64
 #define MESH_TOK_DELIM " \t\r\n\a"
