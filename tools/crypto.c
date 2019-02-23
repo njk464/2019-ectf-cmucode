@@ -1,6 +1,8 @@
 #include <sodium.h>
 #include <stdio.h>
 #include <string.h>
+#include "../Arty-Z7-10/components/ext_sources/u-boot-ectf/include/secret.h"
+
 /*
 #include "libsodium.h"
 
@@ -369,8 +371,8 @@ void full_decrypt_test(){
         while( (row = strsep(&decrypted_header,":")) != NULL ){
             printf("Row: %s\n", row);
             // read the first user
-            test_user = strsep(&decrypted_header," ");
-            printf("Test user: %s\n", test_user);
+            test_user = strsep(&decrypted_header," "); 
+            printf("Test user: %s\n", test_user); // Should work untill here. 
             if(strcmp(test_user, user) == 0){
                 printf("Found the correct user\n");
                 encoded_gamekeynonce = strsep(&decrypted_header, " ");

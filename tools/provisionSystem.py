@@ -208,11 +208,11 @@ def write_factory_secrets(users, f, h):
 #ifndef __SECRET_H__
 #define __SECRET_H__
 
-static char* sign_public_key = {"""
+static char sign_public_key[] = {"""
     s += pk_bytes
-    s += """};\nstatic char* header_key = {"""
+    s += """};\nstatic char header_key[] = {"""
     s += header_key_bytes
-    s += "};\nstatic char* header_nonce = {"
+    s += "};\nstatic char header_nonce[] = {"
     s += header_nonce_bytes
     s += "};\n"
     for entry in salt_array:
@@ -220,7 +220,7 @@ static char* sign_public_key = {"""
         for i in entry[1][:-1]:
             salt_bytes += '0x%x, ' % i
         salt_bytes += '0x%x' % entry[1][-1]
-        s += "static char* " + entry[0] + "_salt = {" + salt_bytes + "};\n"
+        s += "static char " + entry[0] + "_salt[] = {" + salt_bytes + "};\n"
     s += """
 #endif /* __SECRET_H__ */
 """
