@@ -27,6 +27,12 @@ def gen_key_nonce():
 
 def gen_keypair():
     pk, sk = pysodium.crypto_sign_keypair()
+    f = open("pk.out", "wb")
+    f.write(pk)
+    f.close()
+    f = open("sk.out", "wb")
+    f.write(sk)
+    f.close()
     return pk, sk
 
 def validate_users(lines):
@@ -208,19 +214,36 @@ def write_factory_secrets(users, f, h):
 #ifndef __SECRET_H__
 #define __SECRET_H__
 
+#include "mesh.h"
+#define SALT_LENGTH 16
+
 static char sign_public_key[] = {"""
     s += pk_bytes
     s += """};\nstatic char header_key[] = {"""
     s += header_key_bytes
     s += "};\nstatic char header_nonce[] = {"
     s += header_nonce_bytes
-    s += "};\n"
-    for entry in salt_array:
+    s += "};\nstatic char salt[MAX_NUM_USERS][SALT_LENGTH] = {\n"
+
+    for entry in salt_array[:-1]:
         salt_bytes = ""
         for i in entry[1][:-1]:
             salt_bytes += '0x%x, ' % i
         salt_bytes += '0x%x' % entry[1][-1]
-        s += "static char " + entry[0] + "_salt[] = {" + salt_bytes + "};\n"
+        s += "\t{" + salt_bytes + "},\n"
+    entry = salt_array[-1]
+    salt_bytes = ""
+    for i in entry[1][:-1]:
+        salt_bytes += '0x%x, ' % i
+    salt_bytes += '0x%x' % entry[1][-1]
+    s += "\t{" + salt_bytes + "}\n};\n"
+
+
+    s += "static char users[MAX_NUM_USERS][MAX_USERNAME_LENGTH] = {"
+    for entry in salt_array[:-1]:
+        s += "\n\t{\"" + entry[0] + "\"},"
+    entry = salt_array[-1]
+    s += "\n\t{\"" + entry[0] + "\"}\n};"
     s += """
 #endif /* __SECRET_H__ */
 """
