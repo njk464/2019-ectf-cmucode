@@ -6,15 +6,15 @@
  * @params file_name The name of a file
  * @return len The length of the file
  */
-unsigned int get_len(char *file_name){
-    FILE *fp;
-    unsigned int len;
-    fp = fopen(file_name, "r");     
-    fseek(fp, 0, SEEK_END);
-    len = ftell(fp);
-    fclose(fp);
-    return len;
-}
+// unsigned int get_len(char *file_name){
+//     FILE *fp;
+//     unsigned int len;
+//     fp = fopen(file_name, "r");     
+//     fseek(fp, 0, SEEK_END);
+//     len = ftell(fp);
+//     fclose(fp);
+//     return len;
+// }
 
 /*
  * @brief Before null checks on every malloc
@@ -52,12 +52,12 @@ void safe_free(void* ptr, size_t size){
  * @params len The len of the data to read
  * @return void
  */
-void read_from_file(unsigned char *ptr, unsigned char *file_name, unsigned int len){
-    FILE *fp;
-    fp = fopen(file_name,"r");
-    fread(ptr, 1, len, fp);
-    fclose(fp);
-}
+// void read_from_file(unsigned char *ptr, unsigned char *file_name, unsigned int len){
+//     FILE *fp;
+//     fp = fopen(file_name,"r");
+//     fread(ptr, 1, len, fp);
+//     fclose(fp);
+// }
 
 /*
  * @brief TODO: This is a debug function
@@ -66,7 +66,7 @@ void read_from_file(unsigned char *ptr, unsigned char *file_name, unsigned int l
  * @params len The len of the data
  * @return void
  */
-void print_hex(unsigned char *ptr, unsigned int len) {
+/*void print_hex(unsigned char *ptr, unsigned int len) {
       int i;
       int first = 1;
     for (i = 0; i < len; i++) {
@@ -78,7 +78,7 @@ void print_hex(unsigned char *ptr, unsigned int len) {
           }
     }
       printf("\n");
-}
+}*/
 
 /*
  * @brief Given a username, read the salt from secret.h
@@ -217,10 +217,10 @@ int verify_user_can_play(char *username, char* pin, char* gamepath){
     }
 
     // Get the length of the binary
-    unverified_len = get_len(gamepath); //TODO this is a TOCTOU bug
+    //unverified_len = get_len(gamepath); //TODO this is a TOCTOU bug
     // Read in the game file
     signed_ciphertext = safe_malloc(unverified_len);
-    read_from_file(signed_ciphertext, gamepath, unverified_len);
+    //read_from_file(signed_ciphertext, gamepath, unverified_len);
     verified_len = unverified_len -  crypto_sign_BYTES;
     verified_ciphertext = safe_malloc(verified_len);
     // Check the signature
@@ -309,10 +309,10 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
     }
     
     // Get the length of the file 
-    unverified_len = get_len(gamepath);
+    //unverified_len = get_len(gamepath);
     // Read in the game file
     signed_ciphertext = safe_malloc(unverified_len);
-    read_from_file(signed_ciphertext, gamepath, unverified_len);
+    //read_from_file(signed_ciphertext, gamepath, unverified_len);
     verified_len = unverified_len - crypto_sign_BYTES;
     verified_ciphertext = safe_malloc(verified_len);
     // Check the signature
@@ -376,10 +376,10 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
         memcpy(encrypted_game, enc_header_start + encrypted_header_len, encrypted_game_len);
         decrypt(gamekey, gamenonce, encrypted_game, encrypted_game_len, message);
         /* TODO: Change to return what ever we want */
-        FILE *fp;
-        fp = fopen("out.out", "w");
-        fwrite(message, 1, decrypted_game_len, fp);
-        fclose(fp);
+        // FILE *fp;
+        // fp = fopen("out.out", "w");
+        // fwrite(message, 1, decrypted_game_len, fp);
+        // fclose(fp);
         /* ---------------------------------------- */
         safe_free(encrypted_header, encrypted_header_len);
         safe_free(message, decrypted_game_len);
