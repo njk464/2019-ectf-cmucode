@@ -8,6 +8,7 @@
 ifndef CONFIG_SPL_BUILD
 
 obj-y += sodium.o
+obj-y += mesh_crypto.o
 
 obj-$(CONFIG_EFI) += efi/
 obj-$(CONFIG_EFI_LOADER) += efi_loader/
