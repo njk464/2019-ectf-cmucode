@@ -224,7 +224,7 @@ int verify_user_can_play(char *username, char* pin, char* gamepath){
     char *decrypted_header;
     char *verified_ciphertext;
     char test_name[MAX_USERNAME_LENGTH];
-    char *header_nonce[crypto_secretbox_NONCEBYTES];
+    char header_nonce[crypto_secretbox_NONCEBYTES];
     // Init sodium
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
@@ -315,7 +315,7 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
     char *encrypted_game;
     char test_name[MAX_USERNAME_LENGTH];
     int flag = 0;
-    char *header_nonce[crypto_secretbox_NONCEBYTES];
+    char header_nonce[crypto_secretbox_NONCEBYTES];
 
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
