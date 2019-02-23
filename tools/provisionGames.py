@@ -45,7 +45,7 @@ def encrypt_game(game, gamekey, gamenonce):
     encrypted_game = pysodium.crypto_secretbox(gamebin, gamenonce, gamekey)
     return encrypted_game
 
-def encrypt_header(user_array, name, version, game_users, gamekey, gamenonce, header_key, header_nonce):
+def encrypt_header(user_array, name, version, game_users, gamekey, gamenonce, header_key):
     header = bytes("version:%s\n" % (version), "utf-8")
     header += bytes("name:%s\n" % (name), "utf-8")
     for user in game_users:
@@ -64,15 +64,16 @@ def encrypt_header(user_array, name, version, game_users, gamekey, gamenonce, he
             header += user.encode()
             header += ' '.encode()
             header += encrypted_gamekey + user_nonce
+    header_nonce = pysodium.randombytes(pysodium.crypto_secretbox_NONCEBYTES)
     encrypted_header = encrypt(header_key, header_nonce, header)
     # append len i
     print(header)
     header_len = pack('Q', len(encrypted_header))
     print(header_len)
-    encrypted_header = header_len + encrypted_header
+    encrypted_header = header_len + header_nonce + encrypted_header
     return encrypted_header
 
-def provision_game(line, user_array, header_key, header_nonce, sk):
+def provision_game(line, user_array, header_key, sk):
     """Given a line from games.txt, provision a game and write to the
     appropriate directory
 
@@ -130,26 +131,11 @@ def provision_game(line, user_array, header_key, header_nonce, sk):
     # users:drew ben lou hunter 
 
     (gamekey, gamenonce) = gen_key_nonce()
-    encrypted_header = encrypt_header(user_array, name, version, game_users, gamekey, gamenonce, header_key, header_nonce)
+    encrypted_header = encrypt_header(user_array, name, version, game_users, gamekey, gamenonce, header_key)
     encrypted_game = encrypt_game(line, gamekey, gamenonce)
     header_game = encrypted_header + encrypted_game
     signed_file = sign(header_game, sk)
     f_out.write(signed_file)
-
-    # header = bytes("version:%s\n" % (version), "utf-8")
-    # header += bytes("name:%s\n" % (name), "utf-8")
-    # for user in users:
-    #     header = bytes("users:%s\n" % (user), "utf-8")
-    # f_out.write(bytes("version:%s\n" % (version), "utf-8"))
-    # f_out.write(bytes("name:%s\n" % (name), "utf-8"))
-    # f_out.write(bytes("users:%s\n" % (" ".join(users)), "utf-8"))
-
-    # # Read in the binary source
-    # g_src = f.read()
-    # # Write the binary source
-    # while g_src:
-    #     f_out.write(g_src)
-    #     g_src = f.read()
 
     # Close the files
     f_out.close()
@@ -161,17 +147,15 @@ def load_factory_secrets(f):
     lines = [line.rstrip('\n') for line in f]
     sk = lines[-1]
     sk = base64.b64decode(sk)
-    header_nonce = lines[-2]
-    header_nonce = base64.b64decode(header_nonce)
-    header_key = lines[-3]
+    header_key = lines[-2]
     header_key = base64.b64decode(header_key)
     array = []
-    for user in lines[:-3]:
+    for user in lines[:-2]:
         array.append(user.split(' '))
     for user in array:
         user[2] = base64.b64decode(user[2])
 
-    return array, header_key, header_nonce, sk
+    return array, header_key, sk
 
 def main():
     # argument parsing
@@ -199,7 +183,7 @@ def main():
         f_factory_secrets.close() # Doesn't close otherwise?
         exit(2)
     
-    user_array, header_key, header_nonce, sk = load_factory_secrets(f_factory_secrets)
+    user_array, header_key, sk = load_factory_secrets(f_factory_secrets)
 
     subprocess.check_call("mkdir -p %s" % (gen_path), shell=True)
 
@@ -207,7 +191,7 @@ def main():
 
     # Provision each line in the games file
     for line in f_games:
-        provision_game(line, user_array, header_key, header_nonce, sk)
+        provision_game(line, user_array, header_key, sk)
 
     print("Done Provision Games")
 

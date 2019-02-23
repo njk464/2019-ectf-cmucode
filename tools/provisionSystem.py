@@ -186,7 +186,6 @@ def write_factory_secrets(users, f, h):
     header_key, header_nonce = gen_key_nonce()
     pk, sk = gen_keypair()
     f.write(base64.b64encode(header_key).decode() + '\n')
-    f.write(base64.b64encode(header_nonce).decode() + '\n')
     f.write(base64.b64encode(sk).decode() + '\n')
 
     pk_bytes = ""
@@ -221,8 +220,6 @@ static char sign_public_key[] = {"""
     s += pk_bytes
     s += """};\nstatic char header_key[] = {"""
     s += header_key_bytes
-    s += "};\nstatic char header_nonce[] = {"
-    s += header_nonce_bytes
     s += "};\nstatic char salt[MAX_NUM_USERS][SALT_LENGTH] = {\n"
 
     for entry in salt_array[:-1]:
