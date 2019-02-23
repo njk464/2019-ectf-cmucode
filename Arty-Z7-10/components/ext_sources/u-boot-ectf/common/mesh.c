@@ -577,8 +577,9 @@ void mesh_loop(void) {
     }
     mesh_get_install_table();
 
-
-
+    char *ptr;
+    safe_malloc(ptr, 10);
+    safe_free(ptr, 10);
 
     // Perform first time initialization to ensure that the default
     // games are present
