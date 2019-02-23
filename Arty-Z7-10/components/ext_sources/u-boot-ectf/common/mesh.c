@@ -579,7 +579,7 @@ void mesh_loop(void) {
     mesh_get_install_table();
 
     char *ptr;
-    safe_malloc(ptr, 10);
+    ptr = safe_malloc(10);
     printf("In the middle");
     printf("%x", ptr);
     safe_free(ptr, 10);
