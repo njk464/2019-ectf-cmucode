@@ -579,7 +579,10 @@ void mesh_loop(void) {
 
     char *ptr;
     safe_malloc(ptr, 10);
+    printf("In the middle");
+    printf("%x", ptr);
     safe_free(ptr, 10);
+
 
     // Perform first time initialization to ensure that the default
     // games are present
