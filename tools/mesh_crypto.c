@@ -328,7 +328,7 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
     // Read in the game file
     signed_ciphertext = safe_malloc(unverified_len);
     read_from_file(signed_ciphertext, gamepath, unverified_len);
-    verified_len = unverified_len -  crypto_sign_BYTES;
+    verified_len = unverified_len - crypto_sign_BYTES;
     verified_ciphertext = safe_malloc(verified_len);
     // Check the signature
     if(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0){    
@@ -352,7 +352,7 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
         game_version = strsep(&decrypted_header,"\n");
         strsep(&decrypted_header,":");
         game_name = strsep(&decrypted_header,"\n");
-
+        
         // Get the user key
         gen_userkey(user_key, username, pin, game_name, game_version);
 
@@ -373,7 +373,7 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
                 break;
             } else {
                 // strsep to the end of the line
-                decrypted_header += 96; // add one for space
+                decrypted_header += 96; 
                 start_name = decrypted_header;
             }
         }
@@ -388,7 +388,7 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
         // decrypt game
         message = safe_malloc(decrypted_game_len);
         encrypted_game = safe_malloc(encrypted_game_len);
-        memcpy(encrypted_game, verified_ciphertext + sizeof(unsigned long long int) + encrypted_header_len, encrypted_game_len);
+        memcpy(encrypted_game, enc_header_start + encrypted_header_len, encrypted_game_len);
         decrypt(gamekey, gamenonce, encrypted_game, encrypted_game_len, message);
         /* TODO: Change to return what ever we want */
         FILE *fp;
