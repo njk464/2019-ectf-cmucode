@@ -1,6 +1,7 @@
 #ifndef __MESH_H__
 #define __MESH_H__
 
+#include <common.h>
 #include <ext4fs.h>
 
 #define MAX_STR_LEN 64
@@ -69,7 +70,7 @@ char* mesh_input(char* prompt);
 int mesh_valid_install(char *game_name);
 void ptr_to_string(void* ptr, char* buf);
 void full_name_from_short_name(char* full_name, struct games_tbl_row* row);
-void mesh_get_install_table();
+void mesh_get_install_table(void);
 
 /*
     Ext 4 functions
