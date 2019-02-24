@@ -154,7 +154,7 @@ void decrypt(char* key, char* nonce, char* message, unsigned int len, char* ret)
         printf("Decrypt Fail\n");
         safe_free(padded_plaintext, padded_len);
         safe_free(padded_ciphertext, padded_len);
-        exit(0);
+        // exit(0);
     } else {
         plaintext = safe_malloc(plaintext_len);
         // Move the data to print the string out.
@@ -218,7 +218,7 @@ int verify_user_can_play(char *username, char* pin, char* gamepath){
     // Init sodium
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
-        exit(0);
+        // exit(0);
     }
 
     // Get the length of the binary
@@ -310,7 +310,7 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
 
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
-        exit(0);
+        // exit(0);
     }
     
     // Get the length of the file 
@@ -393,7 +393,7 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
     } else {
         // Sign check failed.
         // Exit
-        exit(0);
+        // exit(0);
     }
     safe_free(signed_ciphertext, unverified_len);
     safe_free(verified_ciphertext, verified_len);
@@ -441,7 +441,7 @@ int crypto_get_game_header(Game *game, char *game_name){
 
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
-        exit(0);
+        // exit(0);
     }
     printf("Crypto\n");
     // get the size of the game
