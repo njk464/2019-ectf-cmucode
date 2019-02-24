@@ -13,6 +13,7 @@
 
 #include <mesh.h>
 #include <mesh_users.h>
+#include <secret.h>
 #include <default_games.h>
 #include <bcrypt.h>
 
@@ -34,8 +35,6 @@
 User user;
 struct games_tbl_row *installed_games;
 unsigned int installed_games_size = 0;
-static char flash_key[] = {0x57, 0xc4, 0x3a, 0xe6, 0x1b, 0x50, 0xb4, 0x16, 0xcf, 0x67, 0x7d, 0xbd, 0xcb, 0xe1, 0xf3, 0xf5, 0xc1, 0x6a, 0xc7, 0x59, 0xd1, 0x90, 0x8a, 0xe1, 0x3e, 0xca, 0x13, 0x97, 0xc9, 0x5c, 0x6a, 0xd4};
-
 
 /*
     List of builtin commands, followed by their corresponding functions.
@@ -66,6 +65,7 @@ int (*builtin_func[]) (char **) = {
     &mesh_reset_flash
 };
 
+static void random_nonce(char* buf);
 
 /******************************************************************************/
 /********************************** Flash Commands ****************************/
@@ -144,6 +144,34 @@ int _mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash
 }
 
 /*
+ * This functions the writes the data to the specified flash page. The data 
+ * should be page aligned. 
+ *
+ * args:
+ *      data -> pointer to a buffer with size=FLASH_PAGE_SIZE
+ *      page -> page # that needs to be updated
+ */
+int _mesh_flash_write(void* data, unsigned int page)
+{
+    // Find the sf sub command, defined by u-boot
+    cmd_tbl_t* sf_tp = find_cmd("sf");
+
+    // We need to convert things to strings since this mimics the command prompt
+    char data_ptr_str[11] = "";
+    char offset_str[11] = "";
+    char length_str[11] = "";
+
+    // Convert the pointer to a string representation (0xffffffff)
+    ptr_to_string(data, data_ptr_str);
+    ptr_to_string((void *) (page * FLASH_PAGE_SIZE), offset_str);
+    ptr_to_string((void *) FLASH_PAGE_SIZE, length_str);
+
+    // Perform an update on this page
+    char* write_cmd[] = {"sf", "update", data_ptr_str, offset_str, length_str};
+    sf_tp->cmd(sf_tp, 0, 5, write_cmd);
+}
+
+/*
     wrapper for mesh_flash_write that implements crypto
 */
 
@@ -152,60 +180,54 @@ int mesh_flash_write(void* data, unsigned int flash_location, unsigned int flash
     /* Write flash_length number of bytes starting at what's pointed to by data
      * to address flash_location in flash.
      */
-    printf("write\n");
     if (flash_length < 1)
         return 0;
 
     // malloc space to hold an entire page
-    char* cipher_text = calloc(0, FLASH_PAGE_SIZE);
-    char* plain_text = calloc(0, FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
-
-
-    // Find the sf sub command, defined by u-boot
-    cmd_tbl_t* sf_tp = find_cmd("sf");
-
+    char* cipher_text = calloc(1, FLASH_PAGE_SIZE);
+    char* plain_text  = calloc(1, FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
 
     unsigned int new_offset = flash_location;
-    while (new_offset - flash_location < flash_length) {
-        unsigned int page = new_offset / FLASH_CRYPTO_PAGE_SIZE;
 
+    while (new_offset - flash_location < flash_length) {
+
+        unsigned int page = new_offset / FLASH_CRYPTO_PAGE_SIZE;
         unsigned int current_offset = new_offset % (FLASH_CRYPTO_PAGE_SIZE);
         unsigned int end_offset = FLASH_CRYPTO_PAGE_SIZE;
-        if (flash_location + flash_length - new_offset + current_offset < end_offset) {
+       
+        if (flash_location + flash_length - new_offset + current_offset < end_offset) 
+        {
             end_offset = flash_location + flash_length - new_offset + current_offset;
         }
-        printf("current_offset=%u, end_offset=%u\n", current_offset, end_offset);
+
         memcpy(&plain_text[crypto_secretbox_ZEROBYTES] + current_offset, data, end_offset - current_offset);
+
         //TODO:  create a random nonce here
-        memset(cipher_text, 0, crypto_secretbox_NONCEBYTES);
+        random_nonce(cipher_text);
+        // memset(cipher_text, 0, crypto_secretbox_NONCEBYTES);
         memset(plain_text, 0, crypto_secretbox_ZEROBYTES);
 
         // encrypt the data
-        printf("crypto_secretbox=%d\n",crypto_secretbox(&cipher_text[crypto_secretbox_NONCEBYTES], plain_text, FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES, cipher_text, flash_key));
-        char* plain_text_test = calloc(0, FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
-        memset(&cipher_text[crypto_secretbox_ZEROBYTES], 0, crypto_secretbox_BOXZEROBYTES);
-        printf("crypto_secretbox_open=%d\n",crypto_secretbox_open(plain_text_test, &cipher_text[crypto_secretbox_NONCEBYTES], FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES, cipher_text, flash_key));
-        printf("decrypted=%s\n", &plain_text_test[crypto_secretbox_ZEROBYTES] + current_offset);
-        
-        // We need to convert things to strings since this mimics the command prompt
-        char data_ptr_str[11] = "";
-        char offset_str[11] = "";
-        char length_str[11] = "";
-
-        // Convert the pointer to a string representation (0xffffffff)
-        ptr_to_string(cipher_text, data_ptr_str);
-        ptr_to_string((void *) (page * FLASH_PAGE_SIZE), offset_str);
-        ptr_to_string((void *) FLASH_PAGE_SIZE, length_str);
-
-        // Perform an update on this page
-        char* write_cmd[] = {"sf", "update", data_ptr_str, offset_str, length_str};
-        sf_tp->cmd(sf_tp, 0, 5, write_cmd);
-
+        if((crypto_secretbox( (unsigned char*)  &cipher_text[crypto_secretbox_NONCEBYTES],
+                              (const unsigned char*)  plain_text, 
+                              FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES,
+                              (const unsigned char*) cipher_text,
+                              (const unsigned char*) flash_key)) == -1)
+        {
+            free(cipher_text);
+            free(plain_text);
+            printf("Flash write failed: unable to encrypt the install table \n");
+            return -1;
+        }
+    
+        _mesh_flash_write(cipher_text, page);
         new_offset += end_offset - current_offset;
         data += end_offset - current_offset;
     }
+   
     free(cipher_text);
     free(plain_text);
+   
     return 0;
 }
 
@@ -216,37 +238,49 @@ int mesh_flash_write(void* data, unsigned int flash_location, unsigned int flash
 int mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_length)
 {
     /* Read "flash_length" number of bytes from "flash_location" into "data" */
-    printf("read\n");
     if (flash_length < 1)
         return 0;
 
     // malloc space to hold an entire page
-    char* cipher_text = calloc(0, sizeof(char) * FLASH_PAGE_SIZE);
-    char* plain_text = calloc(0, sizeof(char) * FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
+    char* cipher_text = calloc(1, sizeof(char) * FLASH_PAGE_SIZE);
+    char* plain_text  = calloc(1, sizeof(char) * FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
 
-
-    unsigned int new_offset = flash_location;
+    
+    unsigned int new_offset = flash_location; 
     while (new_offset - flash_location < flash_length) {
         unsigned int page = new_offset / FLASH_CRYPTO_PAGE_SIZE;
-        _mesh_flash_read(cipher_text, page * FLASH_PAGE_SIZE, FLASH_CRYPTO_PAGE_SIZE);
+        _mesh_flash_read(cipher_text, page * FLASH_PAGE_SIZE, FLASH_PAGE_SIZE);
+        
         // nonce is equal to the first 24 bytes of ct
-        if (crypto_secretbox_open(plain_text, &cipher_text[crypto_secretbox_NONCEBYTES], FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES, cipher_text, flash_key) == -1){
+        if (crypto_secretbox_open((unsigned char*) plain_text, 
+                         (const unsigned char*) &cipher_text[crypto_secretbox_NONCEBYTES], 
+                         FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES, 
+                         (const unsigned char*) cipher_text,
+                         (const unsigned char*) flash_key) == -1)
+        {
             free(cipher_text);
             free(plain_text);
             return -1;
         }
+
         unsigned int current_offset = new_offset % (FLASH_CRYPTO_PAGE_SIZE);
         unsigned int end_offset = FLASH_CRYPTO_PAGE_SIZE;
-        if (flash_location + flash_length - new_offset + current_offset < end_offset) {
+       
+        if (flash_location + flash_length - new_offset + current_offset < end_offset)
+        {
             end_offset = flash_location + flash_length - new_offset + current_offset;
         }
-        memcpy(data, &plain_text[crypto_secretbox_ZEROBYTES] + current_offset, end_offset - current_offset);
+       
+        memcpy(data, &plain_text[crypto_secretbox_ZEROBYTES] + current_offset, 
+               end_offset - current_offset);
 
         new_offset += end_offset - current_offset;
         data += end_offset - current_offset;
     }
+
     free(cipher_text);
     free(plain_text);
+
     return 0;
 }
 
@@ -514,7 +548,6 @@ int mesh_uninstall(char **args)
     return 0;
 }
 
-
 /* 
     This is a development utility that allows you to easily dump flash
     memory to std out.
@@ -584,14 +617,7 @@ void mesh_loop(void) {
     memset(user.name, 0, MAX_STR_LEN);
     memset(user.pin, 0, MAX_STR_LEN);
 
-
-
-    mesh_flash_init();
-    mesh_flash_write("blah", 0, 5);
-    char read[5];
-    int ret = mesh_flash_read(read, 0, 5);
-    printf("read=%s, ret=%d\n", read, ret);
-    while(1);
+    mesh_flash_init(); 
     if (mesh_is_first_table_write())
     {
         printf("Performing first time setup...\n");
@@ -599,9 +625,6 @@ void mesh_loop(void) {
         printf("Done!\n");
     }
     mesh_get_install_table();
-
-
-
 
     // Perform first time initialization to ensure that the default
     // games are present
@@ -1406,7 +1429,7 @@ void mesh_get_install_table()
 }
 
 /*
-    Get all of the installed games from flash and place them in RAM
+    Get all of the installed games from RAM and place them in RAM
 */
 void mesh_write_install_table()
 {
@@ -1421,7 +1444,6 @@ void mesh_write_install_table()
     mesh_flash_write(write_buffer, MESH_SENTINEL_LOCATION, write_size);
     free(write_buffer);
 }
-
 
 /*
     This function handles logging in a user. It prompts for a username and pin.
@@ -1459,4 +1481,20 @@ int mesh_login(User *user) {
     free(tmp_pin);
 
     return retval;
+}
+
+/*
+ * return a random buffer of size 24 bytes
+ */
+static void random_nonce(char* buf)
+{
+    int round = 0;
+    unsigned int output;
+
+    while(round++ < 24/(sizeof output))
+    {
+        output = rand(); 
+        strncpy(buf, (char*) &output, sizeof output);
+        buf += sizeof output;
+    }
 }

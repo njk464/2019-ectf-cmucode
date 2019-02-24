@@ -27,6 +27,19 @@
 // on boundaries of size 64K
 #define FLASH_PAGE_SIZE 65536
 
+
+#ifdef DEBUG
+#define debug_hex(length, string) {  \
+    for (int i=0; i<length; i++)     \
+        printf("0x%x ", string[i]);  \
+    }                                \
+    printf("\n");
+#else 
+#define debug_hex(length, string)
+#endif
+
+
+
 typedef struct {
     char name[MAX_USERNAME_LENGTH + 1];
     char pin[MAX_PIN_LENGTH + 1];
