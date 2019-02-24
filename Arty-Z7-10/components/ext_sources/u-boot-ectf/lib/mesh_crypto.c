@@ -315,6 +315,7 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
     
     // Get the length of the file 
     //unverified_len = get_len(gamepath);
+    unverified_len = mesh_size_ext4(gamepath);
     // Read in the game file
     signed_ciphertext = safe_malloc(unverified_len);
     //read_from_file(signed_ciphertext, gamepath, unverified_len);
