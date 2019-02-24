@@ -31,6 +31,7 @@ void *safe_malloc(size_t size){
         return ptr;
     }
    //  exit(0);
+   return ptr;
 
 }
 
@@ -446,11 +447,12 @@ int crypto_get_game_header(Game *game, char *game_name){
     }
     printf("Crypto\n");
     printf("Game Name: %s\n", game_name);
-    printf("Game Size: %lld\n", game_size);
+    
     // get the size of the game
     unverified_len = mesh_size_ext4(game_name);
     verified_len = unverified_len -  crypto_sign_BYTES;
     verified_ciphertext = safe_malloc(verified_len);
+    printf("Game Size: %lld\n", unverified_len);
 
     // read the game into a buffer
     char* signed_ciphertext = (char*) safe_malloc(unverified_len); //TODO: Check length (+1)
