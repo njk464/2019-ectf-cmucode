@@ -434,7 +434,7 @@ int crypto_get_game_header(Game *game, char *game_name){
     char header_nonce[crypto_secretbox_NONCEBYTES];
     char *decrypted_header;
     char *game_version;
-    char *game_name;
+    char *parsed_game_name;
     char *end_game_name;
     char *start_name;
     char *test_name;
@@ -469,7 +469,7 @@ int crypto_get_game_header(Game *game, char *game_name){
         strsep(&decrypted_header,":");
         game_version = strsep(&decrypted_header,"\n");
         strsep(&decrypted_header,":");
-        game_name = strsep(&decrypted_header,"\n");
+        parsed_game_name = strsep(&decrypted_header,"\n");
         end_game_name = decrypted_header - 2; // This is -2 because I don't want to include the newline
 
         // get everything up to the first '.'. That's the major version
@@ -481,8 +481,8 @@ int crypto_get_game_header(Game *game, char *game_name){
         game->major_version = simple_strtoul(major_version_str, NULL, 10);
         game->minor_version = simple_strtoul(minor_version_str, NULL, 10);
 
-        memcpy(game->name, game_name, end_game_name - game_name);
-        game->name[end_game_name - game_name] = '\0';
+        memcpy(game->name, parsed_game_name, end_game_name - parsed_game_name);
+        game->name[end_game_name - parsed_game_name] = '\0';
 
         start_name = decrypted_header; 
         // Loop though the header
