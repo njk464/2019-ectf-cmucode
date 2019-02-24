@@ -1211,6 +1211,8 @@ crypto_hash_sha256(unsigned char *out, const unsigned char *in,
     unsigned char sha512out[64];
     crypto_hash_sha512(sha512out, in, inlen);
     memcpy(out, sha512out, 32);
+
+    return 1;
 }
 
 /**************************************************************

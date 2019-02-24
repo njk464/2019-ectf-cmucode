@@ -1,4 +1,6 @@
 #include <mesh_crypto.h>
+#include <malloc.h>
+#include <stdlib.h>
 
 /*
  * @brief Used to learn the length of a file
@@ -28,7 +30,8 @@ void *safe_malloc(size_t size){
     if (ptr){
         return ptr;
     }
-    exit(0);
+   //  exit(0);
+
 }
 
 /*
@@ -111,7 +114,9 @@ void gen_userkey(char *key, char* name, char* pin, char* game_name, char* versio
     char password[MAX_PASSWORD_SIZE];
     memset(key, 0, crypto_hash_sha256_BYTES);
     sprintf(password, "%s%s%s%s%s", name, pin, game_name, version, get_salt(name));
-    int ret = crypto_hash_sha256(key, password, MAX_PASSWORD_SIZE);
+    int ret = crypto_hash_sha256((unsigned char*) key, 
+                                 (const unsigned char *) password, 
+                                 (unsigned long long) MAX_PASSWORD_SIZE);
 }
 
 /*
