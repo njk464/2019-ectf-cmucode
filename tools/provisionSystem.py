@@ -348,6 +348,12 @@ def main():
     write_mesh_default_h(args.DEFAULT_FILE, default_games_hpath)
     print("Generated default_games.h file")
 
+    # write factory secrets
+    write_factory_secrets(secret_users, f_factory_secrets, f_secret_header)
+    f_factory_secrets.close()
+    f_secret_header.close()
+    print("Generated FactorySecrets file: %s\nGenerated SecretHeader file: %s" % (os.path.join(gen_path, factory_secrets_fn), secret_header_fn))
+    
     # build MES.bin # Doesn't actually create the file? Makes that in package
     build_images()
 
@@ -355,13 +361,6 @@ def main():
     write_system_image_bif(f_system_image)
     f_system_image.close()
     print("Generated SystemImage file: %s" % (os.path.join(gen_path, system_image_fn)))
-
-    # write factory secrets
-    write_factory_secrets(secret_users, f_factory_secrets, f_secret_header)
-    f_factory_secrets.close()
-    f_secret_header.close()
-    print("Generated FactorySecrets file: %s\nGenerated SecretHeader file: %s" % (os.path.join(gen_path, factory_secrets_fn), f_secret_header))
-
 
     exit(0)
 
