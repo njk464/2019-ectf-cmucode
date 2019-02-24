@@ -426,11 +426,11 @@ int crypto_get_game_header(Game *game, char *game_name){
     int i = 0;
     int j = 0;
     int num_users = 0;
-    unsigned long long int unverified_len;
-    unsigned long long int verified_len;
+    loft_t unverified_len;
+    loft_t verified_len;
     char *verified_ciphertext;
-    unsigned long long int encrypted_header_len;
-    unsigned long long int decrypted_header_len;
+    loft_t encrypted_header_len;
+    loft_t decrypted_header_len;
     char *encrypted_header;
     char header_nonce[crypto_secretbox_NONCEBYTES];
     char *decrypted_header;
