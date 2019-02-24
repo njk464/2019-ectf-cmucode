@@ -443,7 +443,7 @@ int crypto_get_game_header(Game *game, char *game_name){
         printf("Error in Crypto Library\n");
         exit(0);
     }
-
+    printf("Crypto\n");
     // get the size of the game
     unverified_len = mesh_size_ext4(game_name);
     verified_len = unverified_len -  crypto_sign_BYTES;
@@ -453,7 +453,8 @@ int crypto_get_game_header(Game *game, char *game_name){
     char* signed_ciphertext = (char*) safe_malloc(unverified_len); //TODO: Check length (+1)
     mesh_read_ext4(game_name, signed_ciphertext, unverified_len);
 
-    if(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0){    
+    if(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0){
+        printf("Verified signed\n");    
         // Read in the size of the encrypted header. 
         memcpy(&encrypted_header_len, verified_ciphertext, sizeof(unsigned long long int));
         decrypted_header_len = encrypted_header_len - crypto_secretbox_MACBYTES;
@@ -472,6 +473,8 @@ int crypto_get_game_header(Game *game, char *game_name){
         parsed_game_name = strsep(&decrypted_header,"\n");
         end_game_name = decrypted_header - 2; // This is -2 because I don't want to include the newline
 
+        printf("Game Name: %s\n", game_name);
+        printf("Game Version: %s\n", game_version);
         // get everything up to the first '.'. That's the major version
         char *temp_pointer = game_version;
         // get after the '.'. That's the minor version
@@ -499,12 +502,15 @@ int crypto_get_game_header(Game *game, char *game_name){
             start_name = decrypted_header;
             memcpy(game->users[num_users], test_name, end_name - start_name);
             game->users[num_users][end_name - start_name] = '\0';
+            printf("User: %s", game->users[num_users]);
             num_users++;
         }
         game->num_users = num_users;
     } else {
+        printf("Sign check fail\n");
         return -1;
     }
     free(verified_ciphertext);
+    printf("got to end\n");
     return 0;
 }

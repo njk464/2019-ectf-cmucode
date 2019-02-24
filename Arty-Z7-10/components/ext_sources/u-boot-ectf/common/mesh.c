@@ -380,7 +380,7 @@ int mesh_query(char **args)
 int mesh_install(char **args)
 {
     /* Install the game */
-
+    printf("mesh_install\n");
     int validated = 0;
     if ((validated = mesh_install_validate_args(args))){
         return validated;
@@ -1074,6 +1074,7 @@ void mesh_get_game_header(Game *game, char *game_name){
             4 - Error, game is already installed
 */
 int mesh_valid_install(char *game_name){
+    printf("mesh_valid_install\n");
     if (!mesh_game_exists(game_name)){
         printf("Game doesnt exist\n");
         return 1;
@@ -1081,6 +1082,7 @@ int mesh_valid_install(char *game_name){
 
     Game game;
     //mesh_get_game_header(&game, game_name);
+    crypto_get_game_header(&game, game_name);
 
     if (!mesh_check_user(&game)){
         return 2;
@@ -1107,7 +1109,7 @@ int mesh_valid_install(char *game_name){
 int mesh_install_validate_args(char **args){
     // ensure a game name is listed
     int errno = 0;
-
+    printf("mesh_install_validate_args\n");
     int argv = mesh_get_argv(args);
     if (argv < 2){
         printf("No game name specified.\n");
