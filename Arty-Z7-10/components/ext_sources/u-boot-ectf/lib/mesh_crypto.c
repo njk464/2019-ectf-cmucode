@@ -72,7 +72,7 @@ void safe_free(void* ptr, size_t size){
 void print_hex(unsigned char *ptr, unsigned int len) {
       int i;
       int first = 1;
-    for (i = 0; i < len; i++) {
+    for (i = 0; i <= len; i++) {
         if(first) {
             printf("0x%02x", ptr[i]);
             first = 0; 
@@ -445,6 +445,7 @@ int crypto_get_game_header(Game *game, char *game_name){
         // exit(0);
     }
     printf("Crypto\n");
+    printf("Game Name: %s\n", game_name);
     // get the size of the game
     unverified_len = mesh_size_ext4(game_name);
     verified_len = unverified_len -  crypto_sign_BYTES;
