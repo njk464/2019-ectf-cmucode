@@ -4,6 +4,7 @@
 #include <sodium.h>
 #include <secret.h>
 #include <mesh.h> 
+#include <linux/types.h>
 
 void *safe_malloc(size_t size);
 void safe_free(void* ptr, size_t size);
