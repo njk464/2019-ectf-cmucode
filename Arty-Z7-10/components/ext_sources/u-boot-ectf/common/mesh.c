@@ -1009,7 +1009,7 @@ void mesh_get_game_header(Game *game, char *game_name){
 
     // get the size of the game
     game_size = mesh_size_ext4(game_name);
-    printf("game_size: %d\n", game_size);
+    printf("game_size: %lld\n", game_size);
     printf("game name: %s\n", game_name);
 
     // read the game into a buffer
