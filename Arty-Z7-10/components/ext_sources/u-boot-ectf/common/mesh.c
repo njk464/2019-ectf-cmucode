@@ -1083,8 +1083,8 @@ int mesh_valid_install(char *game_name){
     }
 
     Game game;
-    mesh_get_game_header(&game, game_name);
-    // crypto_get_game_header(&game, game_name);
+    // mesh_get_game_header(&game, game_name);
+    crypto_get_game_header(&game, game_name);
 
     if (!mesh_check_user(&game)){
         return 2;

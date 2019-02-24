@@ -446,6 +446,7 @@ int crypto_get_game_header(Game *game, char *game_name){
     }
     printf("Crypto\n");
     printf("Game Name: %s\n", game_name);
+    printf("Game Size: %lld\n", game_size);
     // get the size of the game
     unverified_len = mesh_size_ext4(game_name);
     verified_len = unverified_len -  crypto_sign_BYTES;
