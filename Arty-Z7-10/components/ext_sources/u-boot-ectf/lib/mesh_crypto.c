@@ -400,15 +400,106 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
  * @params
  * @return 
  */
-int main(){
-    // Static variables to pass in as tests 
-    char *username = "user";
-    char *pin = "56781234";
-    char *gamepath = "../2048-v1.1";
-    if(verify_user_can_play(username, pin, gamepath)){
-        printf("User can play\n");
-        decrypt_game_file(username, pin, gamepath);
-    } else {
-        printf("User can't play\n");
+// int main(){
+//     // Static variables to pass in as tests 
+//     char *username = "user";
+//     char *pin = "56781234";
+//     char *gamepath = "../2048-v1.1";
+//     if(verify_user_can_play(username, pin, gamepath)){
+//         printf("User can play\n");
+//         decrypt_game_file(username, pin, gamepath);
+//     } else {
+//         printf("User can't play\n");
+//     }
+// }
+
+/*
+    This function extract the game info from the header of a game file.
+*/
+int crypto_get_game_header(Game *game, char *game_name){
+    int i = 0;
+    int j = 0;
+    int num_users = 0;
+    unsigned long long int unverified_len;
+    unsigned long long int verified_len;
+    char *verified_ciphertext;
+    unsigned long long int encrypted_header_len;
+    unsigned long long int decrypted_header_len;
+    char *encrypted_header;
+    char header_nonce[crypto_secretbox_NONCEBYTES];
+    char *decrypted_header;
+    char *game_version;
+    char *game_name;
+    char *end_game_name;
+    char *start_name;
+    char *test_name;
+
+    if (sodium_init() < 0) {
+        printf("Error in Crypto Library\n");
+        exit(0);
     }
+
+    // get the size of the game
+    unverified_len = mesh_size_ext4(game_name);
+    verified_len = unverified_len -  crypto_sign_BYTES;
+    verified_ciphertext = safe_malloc(verified_len);
+
+    // read the game into a buffer
+    char* signed_ciphertext = (char*) safe_malloc(unverified_len); //TODO: Check length (+1)
+    mesh_read_ext4(game_name, signed_ciphertext, unverified_len);
+
+    if(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0){    
+        // Read in the size of the encrypted header. 
+        memcpy(&encrypted_header_len, verified_ciphertext, sizeof(unsigned long long int));
+        decrypted_header_len = encrypted_header_len - crypto_secretbox_MACBYTES;
+        // read in header_nonce
+        memcpy(header_nonce, verified_ciphertext + sizeof(unsigned long long int), crypto_secretbox_NONCEBYTES);
+        // read only the header
+        encrypted_header = safe_malloc(encrypted_header_len);
+        memcpy(encrypted_header, verified_ciphertext + sizeof(unsigned long long int) + crypto_secretbox_NONCEBYTES, encrypted_header_len);
+        // decrypt header 
+        decrypted_header = safe_malloc(decrypted_header_len); 
+        decrypt(header_key, header_nonce, encrypted_header, encrypted_header_len, decrypted_header);
+
+        strsep(&decrypted_header,":");
+        game_version = strsep(&decrypted_header,"\n");
+        strsep(&decrypted_header,":");
+        game_name = strsep(&decrypted_header,"\n");
+        end_game_name = decrypted_header - 2; // This is -2 because I don't want to include the newline
+
+        // get everything up to the first '.'. That's the major version
+        char *temp_pointer = game_version;
+        // get after the '.'. That's the minor version
+        char* major_version_str = strsep(&temp_pointer, ".");
+        char* minor_version_str = strsep(&temp_pointer, "\n");
+
+        game->major_version = simple_strtoul(major_version_str, NULL, 10);
+        game->minor_version = simple_strtoul(minor_version_str, NULL, 10);
+
+        memcpy(game->name, game_name, end_game_name - game_name);
+        game->name[end_game_name - game_name] = '\0';
+
+        start_name = decrypted_header; 
+        // Loop though the header
+        while((decrypted_header = strstr(decrypted_header," ")) != NULL ){
+            if(num_users > MAX_NUM_USERS) {
+                return -1;
+            }
+            char* end_name = decrypted_header; 
+            decrypted_header++; // bypass space
+            memset(test_name, 0, MAX_USERNAME_LENGTH);
+            memcpy(test_name, start_name, end_name - start_name);
+            
+            decrypted_header += 96; 
+            start_name = decrypted_header;
+            memcpy(game->users[num_users], test_name, end_name - start_name);
+            game->users[num_users][end_name - start_name] = '\0';
+            num_users++;
+        }
+        game->num_users = num_users;
+    } else {
+        return -1;
+    }
+    free(verified_ciphertext);
+    return 0;
 }

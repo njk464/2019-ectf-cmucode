@@ -324,7 +324,10 @@ int mesh_play(char **args)
     }
 
     Game game;
-    mesh_get_game_header(&game, args[1]);
+    if(mesh_get_game_header(&game, args[1])){
+        //TODO: more stuff happens here
+        return -1;
+    }
 
     if (mesh_check_downgrade(args[1], game.major_version, game.minor_version) == 1){
         printf("You are not allowed to play an older version of the game once a newer one is installed.\n");
@@ -578,6 +581,12 @@ void mesh_loop(void) {
     }
     mesh_get_install_table();
 
+    char *ptr;
+    ptr = safe_malloc(10);
+    printf("In the middle");
+    printf("%x", ptr);
+    safe_free(ptr, 10);
+
 
     // Perform first time initialization to ensure that the default
     // games are present
@@ -755,7 +764,10 @@ int mesh_ls_iterate_dir(struct ext2fs_node *dir, char *fname)
                 switch (type) {
                 case FILETYPE_REG:
                     // only print name if the user is in valid install list
-                    mesh_get_game_header(&game, filename);
+                    if(mesh_get_game_header(&game, filename)){
+                        // TOOD: check this.
+                        return -1; 
+                    }
                     if (mesh_check_user(&game)){
                         printf("%d      ", game_num++);
                         printf("%s\n", filename);
@@ -1067,6 +1079,7 @@ void mesh_get_game_header(Game *game, char *game_name){
 
     Returns:
         int: An error code representing if the game is valid or not.
+            -1 - Something went bad with crypto or names.
             0 - No error, valid game install
             1 - Error, game does not exist
             2 - Error, user is not allowed
@@ -1080,7 +1093,9 @@ int mesh_valid_install(char *game_name){
     }
 
     Game game;
-    //mesh_get_game_header(&game, game_name);
+    if(mesh_get_game_header(&game, game_name)){
+        return -1;
+    }
 
     if (!mesh_check_user(&game)){
         return 2;
