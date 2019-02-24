@@ -69,7 +69,7 @@ void safe_free(void* ptr, size_t size){
  * @params len The len of the data
  * @return void
  */
-/*void print_hex(unsigned char *ptr, unsigned int len) {
+void print_hex(unsigned char *ptr, unsigned int len) {
       int i;
       int first = 1;
     for (i = 0; i < len; i++) {
@@ -81,7 +81,7 @@ void safe_free(void* ptr, size_t size){
           }
     }
       printf("\n");
-}*/
+}
 
 /*
  * @brief Given a username, read the salt from secret.h
