@@ -4130,6 +4130,8 @@ CONFIG_uioctl=y
 #
 # user packages 
 #
+CONFIG_rng-tools=y
+CONFIG_wipe=y
 
 #
 # PetaLinux RootFS Settings
