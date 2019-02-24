@@ -1009,6 +1009,8 @@ void mesh_get_game_header(Game *game, char *game_name){
 
     // get the size of the game
     game_size = mesh_size_ext4(game_name);
+    printf("game_size: %d\n", game_size);
+    printf("game name: %s\n", game_name);
 
     // read the game into a buffer
     char* game_buffer = (char*) malloc(game_size + 1);
@@ -1081,8 +1083,8 @@ int mesh_valid_install(char *game_name){
     }
 
     Game game;
-    //mesh_get_game_header(&game, game_name);
-    crypto_get_game_header(&game, game_name);
+    mesh_get_game_header(&game, game_name);
+    // crypto_get_game_header(&game, game_name);
 
     if (!mesh_check_user(&game)){
         return 2;
