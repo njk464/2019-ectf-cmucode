@@ -504,7 +504,7 @@ int crypto_get_game_header(Game *game, char *game_name){
                 return -1;
             }
             char* end_name = decrypted_header; 
-            printf("End: %s\n", end_game);
+            printf("End: %s\n", end_name);
             decrypted_header++; // bypass space
             memset(test_name, 0, MAX_USERNAME_LENGTH);
             memcpy(test_name, start_name, end_name - start_name);
