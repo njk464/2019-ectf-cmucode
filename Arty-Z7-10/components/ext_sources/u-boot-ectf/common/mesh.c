@@ -388,9 +388,9 @@ int mesh_play(char **args)
     
     int casted_size = (int) size;
     // Since of int, but then writting it to 0x40 bytes? Thats twice as big. 
-    char *size_str = (char *)safe_malloc(sizeof(int));
+    char *size_str = (char *)safe_malloc(sizeof(int) + 1);
     sprintf(size_str, "0x%x", (int) casted_size);
-    char * const mw_argv[3] = { "mw.l", "0x1fc00000", size_str };
+    char * const mw_argv[3] = { "cp", "0x1fc00000", size_str };
     cmd_tbl_t* mem_write_tp = find_cmd("mw.l");
     mem_write_tp->cmd(mem_write_tp, 0, 3, mw_argv);
 
@@ -401,8 +401,14 @@ int mesh_play(char **args)
     // load_tp->cmd(load_tp, 0, 5, argv);
     // The decimal version of 
     //void * ptr = {'0x40', '0x00', '0xc0', '0x1f'};
-    void *ptr = 0x1fc00040;
-    memcpy(ptr, game_binary, casted_size);
+
+    char *from_str = (char *)safe_malloc(sizeof(void *) + 1);
+    sprintf(from_str, "0x%p", (void *) game_binary);
+    char * const cp_argv[4] = { "cp", from_str, "0x1fc00040",  size_str };
+    cmd_tbl_t* cp_tp = find_cmd("cp");
+    cp_tp->cmd(cp_tp, 0, 4, cp_argv);
+
+
 
     //char * const load_argv[3] = { "mw", "0x1fc00040", game_binary};
     //cmd_tbl_t* mem_write_game_tp = find_cmd("mw");
@@ -410,7 +416,9 @@ int mesh_play(char **args)
 
 
     // cleanup - this is here because boot may not execute following commands
+    free(from_str);
     free(size_str);
+    memset(game_binary, 0, size);
     free(game_binary);
     
     // boot petalinux
