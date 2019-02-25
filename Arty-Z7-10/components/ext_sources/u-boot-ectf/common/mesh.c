@@ -326,22 +326,23 @@ int mesh_play(char **args)
     Game game;
     loff_t size = 0;
     // mesh_get_game_header(&game, args[1]);
-    size = crypto_get_game_header(&game, args[1]);
+    if((size = crypto_get_game_header(&game, args[1])) == -1) {
+        return 0;
+    }
 
     if (mesh_check_downgrade(args[1], game.major_version, game.minor_version) == 1){
         printf("You are not allowed to play an older version of the game once a newer one is installed.\n");
         return 0;
     }
+    
+    // write game size to memory, 64 bytes
+    char *size_str = (char *)malloc(sizeof(int));
+    char *game_binary = malloc(size);
 
-    char *size_str; 
-
-    // get size of binary
-    //size = mesh_size_ext4(args[1]);
-
-    // write game size to memory
-    //char *size_str = (char *)malloc(sizeof(int));
-
-    crypto_get_game(size_str, args[1], &user);
+    if(crypto_get_game(game_binary, args[1], &user) == -1){
+        // This probably means its a bad user.
+        return 0;
+    }
 
     sprintf(size_str, "0x%x", (int) size);
     char * const mw_argv[3] = { "mw.l", "0x1fc00000", size_str };
@@ -349,10 +350,13 @@ int mesh_play(char **args)
     mem_write_tp->cmd(mem_write_tp, 0, 3, mw_argv);
 
     // load game binary into memory
-    char * const argv[5] = { "ext4load", "mmc", "0:2", "0x1fc00040", args[1] };
-    cmd_tbl_t* load_tp = find_cmd("ext4load");
+    // char * const argv[5] = { "ext4load", "mmc", "0:2", "0x1fc00040", args[1]};
+    // cmd_tbl_t* load_tp = find_cmd("ext4load");
 
-    load_tp->cmd(load_tp, 0, 5, argv);
+    // load_tp->cmd(load_tp, 0, 5, argv);
+    // The decimal version of 
+    void * ptr = {'0x1f', '0xc0', '0x00', '0x40'};
+    memcpy(ptr, game_binary, size);
 
     // cleanup - this is here because boot may not execute following commands
     free(size_str);
