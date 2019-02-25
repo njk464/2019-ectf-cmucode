@@ -324,21 +324,25 @@ int mesh_play(char **args)
     }
 
     Game game;
+    loff_t size = 0;
     // mesh_get_game_header(&game, args[1]);
-    crypto_get_game_header(&game, args[1]);
+    size = crypto_get_game_header(&game, args[1]);
 
     if (mesh_check_downgrade(args[1], game.major_version, game.minor_version) == 1){
         printf("You are not allowed to play an older version of the game once a newer one is installed.\n");
         return 0;
     }
 
-    loff_t size = 0;
+    char *size_str; 
 
     // get size of binary
-    size = mesh_size_ext4(args[1]);
+    //size = mesh_size_ext4(args[1]);
 
     // write game size to memory
-    char *size_str = (char *)malloc(sizeof(int));
+    //char *size_str = (char *)malloc(sizeof(int));
+
+    crypto_get_game(size_str, args[1], &user);
+
     sprintf(size_str, "0x%x", (int) size);
     char * const mw_argv[3] = { "mw.l", "0x1fc00000", size_str };
     cmd_tbl_t* mem_write_tp = find_cmd("mw.l");

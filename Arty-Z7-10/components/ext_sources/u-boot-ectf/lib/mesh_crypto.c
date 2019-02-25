@@ -3,22 +3,6 @@
 #include <stdlib.h>
 
 /*
- * @brief Used to learn the length of a file
- * 
- * @params file_name The name of a file
- * @return len The length of the file
- */
-// unsigned int get_len(char *file_name){
-//     FILE *fp;
-//     unsigned int len;
-//     fp = fopen(file_name, "r");     
-//     fseek(fp, 0, SEEK_END);
-//     len = ftell(fp);
-//     fclose(fp);
-//     return len;
-// }
-
-/*
  * @brief Before null checks on every malloc
  *
  * @params size The requested size to allocate in memory
@@ -47,21 +31,6 @@ void safe_free(void* ptr, size_t size){
     free(ptr);
     ptr = NULL;
 }
-
-/*
- * @brief Reads data from a file
- *
- * @params ptr A pointer to read the data to
- * @params file_name The name of the file
- * @params len The len of the data to read
- * @return void
- */
-// void read_from_file(unsigned char *ptr, unsigned char *file_name, unsigned int len){
-//     FILE *fp;
-//     fp = fopen(file_name,"r");
-//     fread(ptr, 1, len, fp);
-//     fclose(fp);
-// }
 
 /*
  * @brief TODO: This is a debug function
@@ -401,34 +370,22 @@ void decrypt_game_file(char *username, char* pin, char* gamepath){
     safe_free(verified_ciphertext, verified_len);
 }
 
-/*
- * @brief Main 
- *
- * @params
- * @return 
- */
-// int main(){
-//     // Static variables to pass in as tests 
-//     char *username = "user";
-//     char *pin = "56781234";
-//     char *gamepath = "../2048-v1.1";
-//     if(verify_user_can_play(username, pin, gamepath)){
-//         printf("User can play\n");
-//         decrypt_game_file(username, pin, gamepath);
-//     } else {
-//         printf("User can't play\n");
-//     }
-// }
+
 
 /*
-    This function extract the game info from the header of a game file.
-*/
-int crypto_get_game_header(Game *game, char *game_name){
+ * @brief This function extract the game info from the header of a game file.
+ *
+ * @params game A pointer to a Game struct that will be populated with the game data 
+ * @params game_name The name of the game that we are getting the header info from
+ * @return The size of the game unencrypted game binary, -1 on error. 
+ */
+loff_t crypto_get_game_header(Game *game, char *game_name){
     int i = 0;
     int j = 0;
     int num_users = 0;
     loff_t unverified_len;
     loff_t verified_len;
+    loff_t decrypted_game_len;
     char *verified_ciphertext;
     loff_t encrypted_header_len;
     loff_t decrypted_header_len;
@@ -443,7 +400,7 @@ int crypto_get_game_header(Game *game, char *game_name){
 
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
-        // exit(0);
+        return -1;
     }
     
     // get the size of the game
@@ -467,6 +424,9 @@ int crypto_get_game_header(Game *game, char *game_name){
         // decrypt header 
         decrypted_header = safe_malloc(decrypted_header_len); 
         decrypt(header_key, header_nonce, encrypted_header, encrypted_header_len, decrypted_header);
+
+        // Get the length of the game, which is the verified len - the 
+        decrypted_game_len = verified_len - encrypted_header_len - sizeof(unsigned long long int) - crypto_secretbox_NONCEBYTES - crypto_secretbox_MACBYTES;
 
         strsep(&decrypted_header,":");
         game_version = strsep(&decrypted_header,"\n");
@@ -509,5 +469,5 @@ int crypto_get_game_header(Game *game, char *game_name){
         return -1;
     }
     free(verified_ciphertext);
-    return 0;
+    return decryped_game_len;
 }
