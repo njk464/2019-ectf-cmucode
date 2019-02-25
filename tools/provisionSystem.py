@@ -332,7 +332,7 @@ def main():
         exit(2)
 
     try:
-        f_secret_header = open(secret_header_fn, "w+")
+        f_secret_header = open(os.path.join(gen_path, secret_header_fn), "w+")
     except Exception as e:
         print("Unable to open secret header file: %s" % (e,))
         exit(2)
