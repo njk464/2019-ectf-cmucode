@@ -67,7 +67,7 @@ char *get_salt(char *username){
             return salt[i];
         }
     }
-    print("Salt not found\n");
+    printf("Salt not found\n");
     return NULL;
 }
 
@@ -385,8 +385,6 @@ int verify_user_can_play(char *username, char* pin, char* gamepath){
  * @return The size of the game unencrypted game binary, -1 on error. 
  */
 loff_t crypto_get_game_header(Game *game, char *game_name){
-    int i = 0;
-    int j = 0;
     int num_users = 0;
     loff_t unverified_len;
     loff_t verified_len;
