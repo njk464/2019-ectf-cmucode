@@ -1,14 +1,7 @@
-# 2019 Collegiate eCTF Example Code
+# 2019 Collegiate eCTF ROP it like it's hot code
 
-This repository contains an example reference system for MITRE's 2019 [Embedded System CTF](http://mitrecyberacademy.org/competitions/embedded/). 
+This repository contains a gaming system for CMU's team `ROP it like it's hot` used for MITRE's 2019 [Embedded System CTF](http://mitrecyberacademy.org/competitions/embedded/). 
 The example reference system was based off of [this repository](https://github.com/Digilent/Petalinux-Arty-Z7-10).
-
-The example meets all the requirements outlined in the challenge writeup document, but is **not** implemented securely.
-
-## Disclaimer
-This code is incomplete, insecure, and does not meet MITRE standards for quality.
-This code is being provided for educational purposes to serve as a simple example that meets the minimum functional requirements for the 2019 MITRE eCTF competition.
-Use this code at your own risk!
 
 ## Getting Started
 
@@ -242,11 +235,8 @@ In summary, the organizers will build your system using the following procedure:
 	6. insert SD into board
 	7. boot
 
-## 3. Modifying the Programmable Logic
 
-Modifying the hardware design is not required for this competition; however, if you choose to, it is recommended that any changes you make are simply modifications to the reference [base design](https://github.com/mitre-cyber-academy/2019-ectf-hardware).
-
-## 4. Reference Design Implementation Details
+## 3. Reference Design Implementation Details
 
 ### provisionSystem.py
 
@@ -315,22 +305,22 @@ The details of how each command is implemented are described below to give you a
 
 #### Game Install Table
 
-Installed games and the associated user information are tracked in flash memory.
+Installed games and the associated user information are tracked in flash memory and in RAM while the system is booted.
+While running only the installed table in RAM is consulted, but changes are still reflected in the flash memory.
 This is done via a table in which each row contains a flag and depending on the value of the flag, a game name, and the user that the game is installed for.
 The row is a struct defined in `include/mesh.h`.
 
-The flag can have 3 values.
+The flag can have 2 values.
 
 `0x00` - A game was installed in this row but it is now uninstalled.
 `0x01` - A game is currently installed.
-`0xFF` - You are at the end of the table and there are no guarantees about the data found after this location.
 
 The game table must be valid for the commands below to work.
-A valid table is defined as one that starts at flash address `0x044`, is made up of a contiguous series of row structs (`games_tbl_row`), in which the last row has the flag `0xFF`.
+A valid table is defined as one that starts at flash address `0x044` with an unsigned int that rpresents how many rows are in the table `num_rows`. At `0x48` it is made up of a contiguous series of `num_rows` row structs (`games_tbl_row`)
 This is achieved by using a sentinel to determine if the table is initialized.
 This sentinel is a random 4 byte value written at flash address `0x40`.
-If the sentinel value is found at `0x40` then the table is initialized. If it is not, then MESH writes the sentinel at `0x40` and writes the end of table flag at `0x44`.
-The install and uninstall commands are required maintain this invariant whenever they operate on the table.
+If the sentinel value is found at `0x40` then the table is initialized. If it is not, then MESH writes the sentinel at `0x40` and writes a size of 0 to `0x44`.
+The install and uninstall commands that are required maintain this invariant whenever they operate on the table.
 
 #### help
 
@@ -434,28 +424,6 @@ This command is implemented very similarly to the `list` command by looping thro
 If the installed game flag is found and the game name and user match, it clears that row to all 1's and sets the flag to `0x00`, signifying an uninstalled game.
 
 See MeSH Install Table for more details on how the MeSH installed games table is implemented in flash.
-
-#### dump
-
-Usage: `dump offset N`
-
-Arguments
-	N 			The number of bytes to print to stdout (in hex)
-	offset		The offset to start reading from (in hex).
-
-This command is provided for purposes of testing and is not required for the shell.
-It provides an easy way to view data written to flash.
-This function utilizes u-boot shell commands, however, due to these commands being static functions, it prepares the arguments as a string (to mimic being called from the command line). It is also important to note that this command interprets `offset` and `N` as hexidecimal numbers. 
-
-#### resetflash
-
-Usage: `resetflash`
-
-This command is provided for purposes of testing and is not required for the shell.
-
-It provides an easy way to reset the entire flash. Under the covers, it runs sf erase 0 0x1000000 which erases the first 0x1000000 bytes. The flash is 16 MB == 16MB * 1024KB/MB * 1024B/KB == 16777216B == 0x1000000 bytes.
-
-It is important to note that when erasing flash, you can only clear it by pages. A page is 64KB, therefore you must clear at least 0x10000 bytes at a time. Furthermore, the sf erase function only works on page boundaries and will give you an error if done with an offset at any other point.
 
 ### Device Tree
 

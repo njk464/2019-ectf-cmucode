@@ -7,6 +7,8 @@
 
 ifndef CONFIG_SPL_BUILD
 
+obj-y += sodium.o
+
 obj-$(CONFIG_EFI) += efi/
 obj-$(CONFIG_EFI_LOADER) += efi_loader/
 obj-$(CONFIG_LZMA) += lzma/
