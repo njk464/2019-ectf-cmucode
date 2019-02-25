@@ -512,11 +512,11 @@ int crypto_get_game_header(Game *game, char *game_name){
             printf("Length: %d\n", end_name - start_name);
             memcpy(test_name, start_name, end_name - start_name);
             printf("Test Name: |%s|\n", test_name);
-            decrypted_header += 96; 
-            start_name = decrypted_header;
             memcpy(game->users[num_users], test_name, end_name - start_name);
             game->users[num_users][end_name - start_name] = '\0';
             printf("User: |%s|\n", game->users[num_users]);
+            decrypted_header += 96; 
+            start_name = decrypted_header;
             num_users++;
         }
         game->num_users = num_users;
