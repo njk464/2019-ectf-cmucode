@@ -367,12 +367,6 @@ def main():
     f_factory_secrets.close()
     f_secret_header.close()
     print("Generated FactorySecrets file: %s\nGenerated SecretHeader file: %s" % (os.path.join(gen_path, factory_secrets_fn), secret_header_fn))
-
-    # write factory secrets
-    write_factory_secrets(secret_users, f_factory_secrets, f_secret_header)
-    f_factory_secrets.close()
-    f_secret_header.close()
-    print("Generated FactorySecrets file: %s\nGenerated SecretHeader file: %s" % (os.path.join(gen_path, factory_secrets_fn), secret_header_fn))
     
     # build MES.bin # Doesn't actually create the file? Makes that in package
     build_images()
