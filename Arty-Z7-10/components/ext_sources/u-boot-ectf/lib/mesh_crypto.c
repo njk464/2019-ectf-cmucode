@@ -445,30 +445,20 @@ int crypto_get_game_header(Game *game, char *game_name){
         printf("Error in Crypto Library\n");
         // exit(0);
     }
-    // printf("Crypto\n");
-    // printf("Game Name: %s\n", game_name);
     
     // get the size of the game
     unverified_len = mesh_size_ext4(game_name);
     verified_len = unverified_len -  crypto_sign_BYTES;
     verified_ciphertext = safe_malloc(verified_len);
-    // printf("Game Size: %lld\n", unverified_len);
 
     // read the game into a buffer
     char* signed_ciphertext = (char*) safe_malloc(unverified_len); //TODO: Check length (+1)
     mesh_read_ext4(game_name, signed_ciphertext, unverified_len);
-    // printf("Crypto Sign: %d\nVerified Len: %lld\nVerified Int: %d, Public Key:\n", crypto_sign_BYTES, verified_len, verified_len);
-    // print_hex(sign_public_key, crypto_sign_PUBLICKEYBYTES);
-    // printf("\n\n\n\n\nSigned Ciphertext: ");
-    // print_hex(signed_ciphertext, unverified_len);
 
     if(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0){
-        // printf("Verified signed\n");    
         // Read in the size of the encrypted header. 
-        // printf("In data: %lld\n", *verified_ciphertext);
         memcpy(&encrypted_header_len, verified_ciphertext, sizeof(unsigned long long int));
         decrypted_header_len = encrypted_header_len - crypto_secretbox_MACBYTES;
-        // printf("Decrypted Header Len: %lld\n", decrypted_header_len);
         // read in header_nonce
         memcpy(header_nonce, verified_ciphertext + sizeof(unsigned long long int), crypto_secretbox_NONCEBYTES);
         // read only the header
@@ -484,8 +474,6 @@ int crypto_get_game_header(Game *game, char *game_name){
         parsed_game_name = strsep(&decrypted_header,"\n");
         end_game_name = decrypted_header - 2; // This is -2 because I don't want to include the newline
 
-        // printf("Game Name: %s\n", parsed_game_name);
-        // printf("Game Version: %s\n", game_version);
         // get everything up to the first '.'. That's the major version
         char *temp_pointer = game_version;
         // get after the '.'. That's the minor version
@@ -499,29 +487,20 @@ int crypto_get_game_header(Game *game, char *game_name){
         game->name[end_game_name - parsed_game_name] = '\0';
 
         start_name = decrypted_header; 
-        // printf("start name: |%s|\n", start_name);
-        // print_hex(start_name, 10);
         // Loop though the header
         while((decrypted_header = strstr(decrypted_header," ")) != NULL ){
             if(num_users > MAX_NUM_USERS) {
                 printf("Max users reached\n");
                 return -1;
             }
-            // printf("Diff %d\n", decrypted_header-start_name);
             char* end_name = decrypted_header; 
-            // printf("End: |%s|\n", end_name);
             decrypted_header++; // bypass space
             memset(test_name, 0, MAX_USERNAME_LENGTH);
-            // printf("Length: %d\n", end_name - start_name);
             memcpy(test_name, start_name, end_name - start_name);
-            // printf("Test Name: |%s|\n", test_name);
             memcpy(game->users[num_users], test_name, end_name - start_name);
             game->users[num_users][end_name - start_name] = '\0';
-            // printf("User: |%s|\n", game->users[num_users]);
             decrypted_header += 96; 
             start_name = decrypted_header;
-            // printf("Next Round: %s\n", start_name);
-            // print_hex(start_name, 20);
             num_users++;
         }
         game->num_users = num_users;
