@@ -1,0 +1,2 @@
+/usr/bin/arm-linux-gnueabihf-ar qc ../lib32/release/libdrmgr_static.a  CMakeFiles/drmgr_static.dir/drmgr.c.o
+/usr/bin/arm-linux-gnueabihf-ranlib ../lib32/release/libdrmgr_static.a

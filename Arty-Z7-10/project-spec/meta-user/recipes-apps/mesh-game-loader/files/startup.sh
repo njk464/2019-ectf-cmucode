@@ -17,7 +17,7 @@ start ()
     touch /usr/bin/startup.sh
 
     echo "#!/bin/sh" >> /usr/bin/startup.sh
-    echo "/usr/share/dynamorio/bin32/drrun -c /usr/share/dynamorio/plugin/libempty.so -- $TMP_FILE" >> /usr/bin/startup.sh
+    echo "/usr/share/dynamorio/bin32/drrun -c /usr/share/dynamorio/plugin/libcfiplugin.so -- $TMP_FILE" >> /usr/bin/startup.sh
 
     # create user and set permissions
     adduser ectf --shell /usr/bin/startup.sh --disabled-password --gecos ""
