@@ -31,11 +31,9 @@
 
 #define FLASH_CRYPTO_PAGE_SIZE (FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES - crypto_secretbox_MACBYTES - crypto_secretbox_BOXZEROBYTES)
 
-// used for the current logged in user
+// declare user global
 User user;
-// pointer to the saved install table
 struct games_tbl_row *installed_games;
-// the number of games installed
 unsigned int installed_games_size = 0;
 
 // Security TODO: 
@@ -113,15 +111,13 @@ int mesh_flash_init(void)
 
 
 /*
- * This function reads data from the specified flash page. The data 
- * should be page aligned. 
- *
- * args:
- *      data -> pointer to a buffer with size=FLASH_PAGE_SIZE
- *      page -> page # that needs to be read
- */
-int _mesh_flash_read(void* data, unsigned int page)
+    This function reads flash_length bytes from the flash memory at flash_location
+    to the byte array data.
+*/
+int _mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_length)
 {
+    /* Read "flash_length" number of bytes from "flash_location" into "data" */
+
     // Find the sf sub command
     cmd_tbl_t* sf_tp = find_cmd("sf");
 
@@ -132,8 +128,8 @@ int _mesh_flash_read(void* data, unsigned int page)
     char length_ptr[11] = "";
     // Convert the point to a string representation
     ptr_to_string(data, str_ptr);
-    ptr_to_string((unsigned int *) (page * FLASH_PAGE_SIZE), offset_ptr);
-    ptr_to_string((unsigned int *) FLASH_PAGE_SIZE, length_ptr);
+    ptr_to_string((unsigned int *) flash_location, offset_ptr);
+    ptr_to_string((unsigned int *) flash_length, length_ptr);
 
     // Perform an update
     char* read_cmd[] = {"sf", "read", str_ptr, offset_ptr, length_ptr};
@@ -141,7 +137,7 @@ int _mesh_flash_read(void* data, unsigned int page)
 }
 
 /*
- * This function writes data to the specified flash page. The data 
+ * This functions the writes the data to the specified flash page. The data 
  * should be page aligned. 
  *
  * args:
@@ -246,7 +242,7 @@ int mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_
     unsigned int new_offset = flash_location; 
     while (new_offset - flash_location < flash_length) {
         unsigned int page = new_offset / FLASH_CRYPTO_PAGE_SIZE;
-        _mesh_flash_read(cipher_text, page);
+        _mesh_flash_read(cipher_text, page * FLASH_PAGE_SIZE, FLASH_PAGE_SIZE);
         
         // nonce is equal to the first 24 bytes of ct
         if (crypto_secretbox_open((unsigned char*) plain_text, 
@@ -426,7 +422,7 @@ int mesh_query(char **args)
 int mesh_install(char **args)
 {
     /* Install the game */
-    printf("installing\n");
+
     int validated = 0;
     if ((validated = mesh_install_validate_args(args))){
         return validated;
@@ -524,7 +520,7 @@ int mesh_uninstall(char **args)
         row = &installed_games[index];
         // the most space that we could need to store the full game name
         char* full_name = (char*) safe_malloc(snprintf(NULL, 0, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version) + 1);
-        full_name_from_short_name(full_name, &row);
+        full_name_from_short_name(full_name, row);
 
         if (strcmp(row->user_name, user.name) == 0 &&
             strcmp(full_name, args[1]) == 0 &&
@@ -579,6 +575,8 @@ int mesh_dump_flash(char **args)
     return 0;
 }
 
+
+// TODO: remove, or at least remove args
 int mesh_reset_flash(char **args)
 {
     // 0x1000000 is all 16 MB of flash
@@ -612,8 +610,7 @@ void mesh_loop(void) {
     memset(user.name, 0, MAX_USERNAME_LENGTH + 1);
     memset(user.pin, 0, MAX_PIN_LENGTH + 1);
 
-    mesh_flash_init(); 
-    mesh_reset_flash(NULL);
+    mesh_flash_init();
     if (mesh_is_first_table_write())
     {
         printf("Performing first time setup...\n");
@@ -921,6 +918,7 @@ void *safe_calloc(size_t nitems, size_t size){
         // If bad malloc, exit
         mesh_shutdown(NULL);
     }
+    return p;
 }
 
 void *safe_realloc(void *ptr, size_t size){
@@ -929,9 +927,8 @@ void *safe_realloc(void *ptr, size_t size){
         // If bad malloc, exit
         mesh_shutdown(NULL);
     }
+    return p;
 }
-
-
 
 void full_name_from_short_name(char* full_name, struct games_tbl_row* row)
 {
@@ -952,7 +949,7 @@ int mesh_game_installed(char *game_name){
         row = &installed_games[index];
         // the most space that we could need to store the full game name
         char* full_name = (char*) safe_malloc(snprintf(NULL, 0, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version) + 1);
-        full_name_from_short_name(full_name, &row);
+        full_name_from_short_name(full_name, row);
 
         // check if game is installed and if it is for the specified user.
         if (strcmp(game_name, full_name) == 0 &&
@@ -1309,11 +1306,15 @@ int mesh_validate_user(User *user)
         if (strcmp(mesh_users[i].username, user->name) == 0 &&
             bcrypt_checkpass(user->pin, mesh_users[i].hash) == 0)
         {
-            return 0;
+            if (bcrypt_checkpass(user->pin, mesh_users[i].hash) == 0) {
+                return 0;
+            }
+            else {
+                return 1;
+            }
         }
     }
-    // run bcrypt even if the username was not found 
-    // to prevent timing attacks on the username
+    // run bcrypt even if no 
     bcrypt_checkpass(user->pin, default_hash);
     return 1;
 }
@@ -1499,8 +1500,7 @@ int mesh_login(User *user) {
     /* if valid user, copy into user */
     retval = mesh_validate_user(&tmp_user);
     if (!retval) {
-        strncpy(user->name, tmp_user.name, MAX_USERNAME_LENGTH + 1);
-        strncpy(user->pin, tmp_user.pin, MAX_PIN_LENGTH + 1);
+        strncpy(user->name, tmp_user.name, MAX_USERNAME_LENGTH);
     } else {
         printf("Login failed. Please try again\n");
     }

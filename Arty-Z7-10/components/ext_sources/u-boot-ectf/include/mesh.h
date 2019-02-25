@@ -86,6 +86,7 @@ void *safe_malloc(size_t size);
 void *safe_calloc(size_t nitems, size_t size);
 void *safe_realloc(void *ptr, size_t size);
 void mesh_get_install_table();
+void mesh_write_install_table();
 
 /*
     Ext 4 functions
