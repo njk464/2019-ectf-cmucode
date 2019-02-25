@@ -381,7 +381,6 @@ int mesh_query(char **args)
 int mesh_install(char **args)
 {
     /* Install the game */
-    printf("mesh_install\n");
     int validated = 0;
     if ((validated = mesh_install_validate_args(args))){
         return validated;
@@ -1005,66 +1004,66 @@ int mesh_check_downgrade(char *game_name, unsigned int major_version, unsigned i
 /*
     This function extract the game info from the header of a game file.
 */
-void mesh_get_game_header(Game *game, char *game_name){
-    loff_t game_size;
-    int i = 0;
-    int j = 0;
+// void mesh_get_game_header(Game *game, char *game_name){
+//     loff_t game_size;
+//     int i = 0;
+//     int j = 0;
 
-    // get the size of the game
-    game_size = mesh_size_ext4(game_name);
-    printf("game_size: %lld\n", game_size);
-    printf("game name: %s\n", game_name);
+//     // get the size of the game
+//     game_size = mesh_size_ext4(game_name);
+//     printf("game_size: %lld\n", game_size);
+//     printf("game name: %s\n", game_name);
 
-    // read the game into a buffer
-    char* game_buffer = (char*) malloc(game_size + 1);
-    mesh_read_ext4(game_name, game_buffer, game_size);
+//     // read the game into a buffer
+//     char* game_buffer = (char*) malloc(game_size + 1);
+//     mesh_read_ext4(game_name, game_buffer, game_size);
 
-    // get the version, located on the first line. will always be major.minor
+//     // get the version, located on the first line. will always be major.minor
 
-    // remove the string "version"
-    strtok(game_buffer, ":");
-    // get everything up to the first '.'. That's the major version
-    char* major_version_str = strtok(NULL, ".");
-    // get after the '.'. That's the minor version
-    char* minor_version_str = strtok(NULL, "\n");
+//     // remove the string "version"
+//     strtok(game_buffer, ":");
+//     // get everything up to the first '.'. That's the major version
+//     char* major_version_str = strtok(NULL, ".");
+//     // get after the '.'. That's the minor version
+//     char* minor_version_str = strtok(NULL, "\n");
 
-    // get the name, located after "name:"
-    char* name = strtok(NULL, ":");
-    name = strtok(NULL, "\n");
+//     // get the name, located after "name:"
+//     char* name = strtok(NULL, ":");
+//     name = strtok(NULL, "\n");
 
-    // get the users, located after "users:"
-    char* users = strtok(NULL, ":");
-    users = strtok(NULL, "\n");
+//     // get the users, located after "users:"
+//     char* users = strtok(NULL, ":");
+//     users = strtok(NULL, "\n");
 
-    // copy major and minor version into struct
-    game->major_version = simple_strtoul(major_version_str, NULL, 10);
-    game->minor_version = simple_strtoul(minor_version_str, NULL, 10);
+//     // copy major and minor version into struct
+//     game->major_version = simple_strtoul(major_version_str, NULL, 10);
+//     game->minor_version = simple_strtoul(minor_version_str, NULL, 10);
 
-    // copy name
-    for (i=0; i<MAX_GAME_LENGTH && name[i] != '\0'; i++){
-        game->name[i] = name[i];
-    }
-    game->name[i] = '\0';
+//     // copy name
+//     for (i=0; i<MAX_GAME_LENGTH && name[i] != '\0'; i++){
+//         game->name[i] = name[i];
+//     }
+//     game->name[i] = '\0';
 
-    // copy users
-    int strplace = 0;
-    for (i=0; i<MAX_NUM_USERS && users[strplace] != '\0'; i++){
-        for (j=0; j<=MAX_USERNAME_LENGTH && users[strplace] != ' ' && users[strplace] != '\0'; j++){
-            game->users[i][j] = users[strplace++];
-        }
+//     // copy users
+//     int strplace = 0;
+//     for (i=0; i<MAX_NUM_USERS && users[strplace] != '\0'; i++){
+//         for (j=0; j<=MAX_USERNAME_LENGTH && users[strplace] != ' ' && users[strplace] != '\0'; j++){
+//             game->users[i][j] = users[strplace++];
+//         }
 
-        // increment past space if you are there
-        if (users[strplace] == ' '){
-            strplace++;
-        }
+//         // increment past space if you are there
+//         if (users[strplace] == ' '){
+//             strplace++;
+//         }
 
-        // null terminate user
-        game->users[i][j] = '\0';
-    }
-    game->num_users = i;
+//         // null terminate user
+//         game->users[i][j] = '\0';
+//     }
+//     game->num_users = i;
 
-    free(game_buffer);
-}
+//     free(game_buffer);
+// }
 /*
     This function reads in the specified game and ensures that the user is
     in the allowed users section of the game and that you are not downgrading
@@ -1079,7 +1078,6 @@ void mesh_get_game_header(Game *game, char *game_name){
             4 - Error, game is already installed
 */
 int mesh_valid_install(char *game_name){
-    printf("mesh_valid_install\n");
     if (!mesh_game_exists(game_name)){
         printf("Game doesnt exist\n");
         return 1;
@@ -1114,7 +1112,6 @@ int mesh_valid_install(char *game_name){
 int mesh_install_validate_args(char **args){
     // ensure a game name is listed
     int errno = 0;
-    printf("mesh_install_validate_args\n");
     int argv = mesh_get_argv(args);
     if (argv < 2){
         printf("No game name specified.\n");

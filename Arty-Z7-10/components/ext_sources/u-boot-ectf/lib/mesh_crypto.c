@@ -530,6 +530,5 @@ int crypto_get_game_header(Game *game, char *game_name){
         return -1;
     }
     free(verified_ciphertext);
-    printf("got to end\n");
     return 0;
 }
