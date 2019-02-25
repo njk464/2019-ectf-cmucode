@@ -9,7 +9,6 @@
 #include <spi_flash.h>
 #include <command.h>
 #include <os.h>
-#include <sodium.h>
 
 #include <mesh.h>
 #include <mesh_users.h>
