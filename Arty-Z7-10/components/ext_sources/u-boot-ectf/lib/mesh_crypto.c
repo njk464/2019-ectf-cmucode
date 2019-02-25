@@ -77,16 +77,17 @@ char *get_salt(char *username){
  * @params pin The pin of the user
  * @params game_name The name of the game
  * @params version The version number of the game
- * @return void TODO: Change to return on error. ret 
+ * @return void 
  */
 void gen_userkey(char *key, char* name, char* pin, char* game_name, char* version){
     int MAX_PASSWORD_SIZE = strlen(name) + strlen(pin) + strlen(game_name) + strlen(version) + crypto_pwhash_SALTBYTES ; 
     char password[MAX_PASSWORD_SIZE];
     memset(key, 0, crypto_hash_sha256_BYTES);
     sprintf(password, "%s%s%s%s%s", name, pin, game_name, version, get_salt(name));
-    int ret = crypto_hash_sha256((unsigned char*) key, 
+    crypto_hash_sha256((unsigned char*) key, 
                                  (const unsigned char *) password, 
                                  (unsigned long long) MAX_PASSWORD_SIZE);
+    return;
 }
 
 /*
@@ -96,10 +97,10 @@ void gen_userkey(char *key, char* name, char* pin, char* game_name, char* versio
  * @params nonce The nonce for use in decryption
  * @params message The message to decrypt
  * @params len The len of the encrypted message
- * @params ret A pointer to the location in memeory of the decrypted data
- * @return void TODO: Should change to return on error
+ * @params ret A pointer to the location in memory of the decrypted data
+ * @return int: return 0 on success; else -1
  */
-void decrypt(char* key, char* nonce, char* message, unsigned int len, char* ret){
+int decrypt(char* key, char* nonce, char* message, unsigned int len, char* ret){
     int plaintext_len = len - crypto_secretbox_MACBYTES;
     int padded_len = len + crypto_secretbox_BOXZEROBYTES;
     unsigned char *padded_plaintext;
@@ -125,6 +126,7 @@ void decrypt(char* key, char* nonce, char* message, unsigned int len, char* ret)
         safe_free(padded_plaintext, padded_len);
         safe_free(padded_ciphertext, padded_len);
         // exit(0);
+        return -1;
     } else {
         plaintext = safe_malloc(plaintext_len);
         // Move the data to print the string out.
@@ -141,6 +143,7 @@ void decrypt(char* key, char* nonce, char* message, unsigned int len, char* ret)
         safe_free(plaintext, plaintext_len);
         safe_free(padded_plaintext, padded_len);
         safe_free(padded_ciphertext, padded_len);
+        return 0;
     }
 }
 
@@ -532,7 +535,9 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         memcpy(encrypted_header, enc_header_start, encrypted_header_len);
         // decrypt header 
         decrypted_header = safe_malloc(decrypted_header_len); 
-        decrypt(header_key, header_nonce, encrypted_header, encrypted_header_len, decrypted_header);
+        if(decrypt(header_key, header_nonce, encrypted_header, encrypted_header_len, decrypted_header) == -1){
+            return -1;
+        }
 
         // Get the length of the game, which is the verified len - the 
         decrypted_game_len = verified_len - encrypted_header_len - sizeof(unsigned long long int) - crypto_secretbox_NONCEBYTES - crypto_secretbox_MACBYTES;
@@ -555,6 +560,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
             memset(test_name, 0, MAX_USERNAME_LENGTH);
             memcpy(test_name, start_name, end_name - start_name);
             if(strcmp(test_name, user->name) == 0){
+                printf("Test Name: %s\n User Name: %s\n", test_name, user->name);
                 // TODO: might need to account for a space here
                 strncpy(encrypted_gamekeynonce, decrypted_header, encrypted_gamekeynonce_len);
                 strncpy(user_nonce, decrypted_header + encrypted_gamekeynonce_len, crypto_secretbox_NONCEBYTES);
@@ -569,10 +575,15 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         }
         if(flag == 1){
             // Get the user key
+            print("User: |%s|\nPin: |%s|\nGame name: |%s|\nVersion: |%s|\n", user->name, user->pin, game_name, game_version);
             gen_userkey(user_key, user->name, user->pin, game_name, game_version);
+            print_hex(user_key, crypto_secretbox_KEYBYTES);
+
 
              // decrypt the gamekeynonce
-            decrypt(user_key, user_nonce, encrypted_gamekeynonce, encrypted_gamekeynonce_len, gamekey_nonce);
+            if(decrypt(user_key, user_nonce, encrypted_gamekeynonce, encrypted_gamekeynonce_len, gamekey_nonce) == -1){
+                return -1;
+            }
             memcpy(gamekey, gamekey_nonce, crypto_secretbox_KEYBYTES);
             memcpy(gamenonce, gamekey_nonce + crypto_secretbox_KEYBYTES, crypto_secretbox_NONCEBYTES);
         
@@ -580,7 +591,9 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
             // message = safe_malloc(decrypted_game_len);
             encrypted_game = safe_malloc(encrypted_game_len);
             memcpy(encrypted_game, enc_header_start + encrypted_header_len, encrypted_game_len);
-            decrypt(gamekey, gamenonce, encrypted_game, encrypted_game_len, game_binary);
+            if(decrypt(gamekey, gamenonce, encrypted_game, encrypted_game_len, game_binary) == -1){
+                return -1;
+            }
 
             //copy decrypted game to pass out
             // memcpy(game_binary, message, decrypted_game_len);
