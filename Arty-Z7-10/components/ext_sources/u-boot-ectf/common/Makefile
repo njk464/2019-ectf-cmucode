@@ -15,6 +15,7 @@ obj-$(CONFIG_HUSH_PARSER) += cli_hush.o
 obj-$(CONFIG_AUTOBOOT) += autoboot.o
 obj-y += mesh.o
 
+
 # This option is not just y/n - it can have a numeric value
 ifdef CONFIG_BOOT_RETRY_TIME
 obj-y += bootretry.o
@@ -155,6 +156,10 @@ obj-$(CONFIG_IO_TRACE) += iotrace.o
 obj-y += memsize.o
 obj-y += stdio.o
 
+# bcrypt library
+obj-y += blf.o
+obj-y += bcrypt.o
+
 # This option is not just y/n - it can have a numeric value
 ifdef CONFIG_FASTBOOT_FLASH
 obj-y += image-sparse.o
@@ -178,5 +183,6 @@ obj-$(CONFIG_CMD_DFU) += dfu.o
 obj-y += command.o
 obj-y += s_record.o
 obj-y += xyzModem.o
+
 
 CFLAGS_env_embedded.o := -Wa,--no-warn -DENV_CRC=$(shell tools/envcrc 2>/dev/null)

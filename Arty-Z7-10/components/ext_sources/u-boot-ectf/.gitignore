@@ -24,6 +24,7 @@
 # mesh generated files
 /include/default_games.h
 /include/mesh_users.h
+/include/secret.h
 
 # host programs on Cygwin
 *.exe

@@ -4132,8 +4132,9 @@ CONFIG_uioctl=y
 #
 CONFIG_rng-tools=y
 CONFIG_wipe=y
+CONFIG_libsodium=y
 
 #
 # PetaLinux RootFS Settings
 #
-CONFIG_ROOTFS_ROOT_PASSWD="eCTF-cmu-temporary-root-passwd"
+CONFIG_ROOTFS_ROOT_PASSWD="ectf-cmu-temp-root-passwd"

@@ -4,6 +4,9 @@ import os
 import subprocess
 import re
 import argparse
+import base64
+import pysodium
+import bcrypt
 
 # Path to the mesh_users header file
 mesh_users_fn = os.environ["ECTF_UBOOT"] + "/include/mesh_users.h"
@@ -15,12 +18,46 @@ gen_path = "files/generated"
 system_image_fn = "SystemImage.bif"
 # File name for the factory secrets
 factory_secrets_fn = "FactorySecrets.txt"
+# Path to secrets header file
+secret_header_fn = os.environ["ECTF_UBOOT"] + "/include/secret.h"
 
+def gen_key_nonce():
+    key = pysodium.randombytes(pysodium.crypto_secretbox_KEYBYTES)
+    nonce = pysodium.randombytes(pysodium.crypto_secretbox_NONCEBYTES)
+    return (key, nonce)
+
+def gen_keypair():
+    pk, sk = pysodium.crypto_sign_keypair()
+    f = open("pk.out", "wb")
+    f.write(pk)
+    f.close()
+    f = open("sk.out", "wb")
+    f.write(sk)
+    f.close()
+    return pk, sk
 
 def validate_users(lines):
     """Validate that the users data is formatted properly and return a list
     of tuples of users and pins.
+    TODO: Check this regular expression
+    lines: list of strings from a users.txt file with newlines removed
+    """
+    # Regular expression to ensure that there is a username and an 8 digit pin
+    reg = r'^\s*(\w+)\s+(\d{8})\s*$'
+    users = []
+    for line in lines:
+        for m in [re.match(reg, line)]:
+            if m:
+                hashed_pass = bcrypt.hashpw(m.group(2).encode('utf-8'), bcrypt.gensalt(rounds=8)).decode("utf-8")
+                users.append((m.group(1), hashed_pass))
 
+    # return a list of tuples of (username, hashed_pin)
+    return users
+
+def factory_secrets_users(lines):
+    """Validate that the users data is formatted properly and return a list
+    of tuples of users and pins.
+    TODO: Check this regular expression
     lines: list of strings from a users.txt file with newlines removed
     """
     # Regular expression to ensure that there is a username and an 8 digit pin
@@ -30,7 +67,6 @@ def validate_users(lines):
 
     # return a list of tuples of (username, pin)
     return lines
-
 
 def write_mesh_users_h(users, f):
     """Write user inforation to a header file
@@ -49,25 +85,30 @@ def write_mesh_users_h(users, f):
 #ifndef __MESH_USERS_H__
 #define __MESH_USERS_H__
 
+#include <mesh.h>
+
 #define NUM_MESH_USERS {num_users}
 
 struct MeshUser {{
-    char username[16];
-    char pin[9];
+    char username[MAX_USERNAME_LENGTH + 1];
+    char hash[61];
+    char pin[MAX_PIN_LENGTH + 1];
 }};
 
 static struct MeshUser mesh_users[] = {{
 """.format(num_users=len(users)))
 
-    for (user, pin) in users:
-        data = '    {.username="%s", .pin="%s"},\n' % (user, pin)
+    for (user, hashpw) in users:
+        data = '    {.username="%s", .hash="%s"},\n' % (user, hashpw)
         f.write(data)
 
     f.write("""
-};
+}};
+
+static char* default_hash = "{}";
 
 #endif /* __MESH_USERS_H__ */
-""")
+""".format(users[len(users)-1][1]))
 
 
 def write_mesh_default_h(default_txt_path, header_path):
@@ -153,13 +194,89 @@ MITRE_Entertainment_System: {{
     """.format(path=os.environ["ECTF_PETALINUX"]))
 
 
-def write_factory_secrets(f):
+def write_factory_secrets(users, f, h):
     """Write any factory secrets. The reference implementation has none
-
+    users: tuples of the users 
     f: open file to write the factory secrets to
+    h: open file to write data to pass along to shell
     """
-    None
 
+    salt_array = []
+    for user in users:
+        salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
+        f.write(user[0]+ ' '+ user[1] + ' '+ base64.b64encode(salt).decode() + '\n')
+        salt_array.append([user[0], salt])
+    header_key, header_nonce = gen_key_nonce()
+    flash_key, flash_nonce = gen_key_nonce()
+    pk, sk = gen_keypair()
+    f.write(base64.b64encode(header_key).decode() + '\n')
+    f.write(base64.b64encode(sk).decode() + '\n')
+
+    pk_bytes = ""
+    for i in pk[:-1]:
+        pk_bytes += '0x%x, ' % i
+    pk_bytes += '0x%x' % pk[-1]
+
+    header_key_bytes = ""
+    for i in header_key[:-1]:
+        header_key_bytes += '0x%x, ' % i
+    header_key_bytes += '0x%x' % header_key[-1]
+
+    flash_key_bytes = ""
+    for i in flash_key[:-1]:
+        flash_key_bytes += '0x%x, ' % i
+    flash_key_bytes += '0x%x' % flash_key[-1]
+
+    header_nonce_bytes = ""
+    for i in header_nonce[:-1]:
+        header_nonce_bytes += '0x%x, ' % i
+    header_nonce_bytes += '0x%x' % header_nonce[-1]
+
+    s = """
+/*
+* This is an automatically generated file by provisionSystem.py
+*
+*
+*/
+
+#ifndef __SECRET_H__
+#define __SECRET_H__
+
+#include "mesh.h"
+#define SALT_LENGTH 16
+
+static char sign_public_key[] = {"""
+    s += pk_bytes
+    s += """};\nstatic char header_key[] = {"""
+    s += header_key_bytes
+    s += """};\nstatic char flash_key[] = {"""
+    s += flash_key_bytes
+    s += "};\nstatic char salt[MAX_NUM_USERS][SALT_LENGTH] = {\n"
+
+    for entry in salt_array[:-1]:
+        salt_bytes = ""
+        for i in entry[1][:-1]:
+            salt_bytes += '0x%x, ' % i
+        salt_bytes += '0x%x' % entry[1][-1]
+        s += "\t{" + salt_bytes + "},\n"
+    entry = salt_array[-1]
+    salt_bytes = ""
+    for i in entry[1][:-1]:
+        salt_bytes += '0x%x, ' % i
+    salt_bytes += '0x%x' % entry[1][-1]
+    s += "\t{" + salt_bytes + "}\n};\n"
+
+
+    s += "static char users[MAX_NUM_USERS][MAX_USERNAME_LENGTH] = {"
+    for entry in salt_array[:-1]:
+        s += "\n\t{\"" + entry[0] + "\"},"
+    entry = salt_array[-1]
+    s += "\n\t{\"" + entry[0] + "\"}\n};"
+    s += """
+#endif /* __SECRET_H__ */
+"""
+
+    h.write(s)
 
 def main():
     # Argument parsing
@@ -209,9 +326,18 @@ def main():
         print("Unable to open %s: %s" % (factory_secrets_fn, e,))
         exit(2)
 
+    try:
+        f_secret_header = open(secret_header_fn, "w+")
+    except Exception as e:
+        print("Unable to open secret header file: %s" % (e,))
+        exit(2)
+
     # Read in all of the user information into a list and strip newlines
     lines = [line.rstrip('\n') for line in f_mesh_users_in]
 
+    users = validate_users(lines)
+
+    secret_users = factory_secrets_users(lines)
     # parse user strings
     try:
         users = validate_users(lines)
@@ -220,7 +346,8 @@ def main():
             exit(2)
 
     # Add the demo user, which must always exist, per the rules
-    users.append(("demo", "00000000"))
+    demo_hash = bcrypt.hashpw("00000000".encode('utf-8'), bcrypt.gensalt(rounds=8)).decode("utf-8")
+    users.append(("demo", demo_hash))
     # write mesh users to uboot header
     write_mesh_users_h(users, f_mesh_users_out)
     f_mesh_users_out.close()
@@ -229,8 +356,14 @@ def main():
     # Write the default games file
     write_mesh_default_h(args.DEFAULT_FILE, default_games_hpath)
     print("Generated default_games.h file")
+    
+    # write factory secrets
+    write_factory_secrets(secret_users, f_factory_secrets, f_secret_header)
+    f_factory_secrets.close()
+    f_secret_header.close()
+    print("Generated FactorySecrets file: %s\nGenerated SecretHeader file: %s" % (os.path.join(gen_path, factory_secrets_fn), secret_header_fn))
 
-    # build MES.bin
+    # build MES.bin # Doesn't actually create the file? Makes that in package
     build_images()
 
     # write system image bif
@@ -238,10 +371,7 @@ def main():
     f_system_image.close()
     print("Generated SystemImage file: %s" % (os.path.join(gen_path, system_image_fn)))
 
-    # write factory secrets
-    write_factory_secrets(f_factory_secrets)
-    f_factory_secrets.close()
-    print("Generated FactorySecrets file: %s" % (os.path.join(gen_path, factory_secrets_fn)))
+
 
     exit(0)
 
