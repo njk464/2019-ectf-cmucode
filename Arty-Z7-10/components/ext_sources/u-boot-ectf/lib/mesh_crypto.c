@@ -439,7 +439,7 @@ int crypto_get_game_header(Game *game, char *game_name){
     char *parsed_game_name;
     char *end_game_name;
     char *start_name;
-    char *test_name;
+    char test_name[MAX_USERNAME_LENGTH];
 
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
