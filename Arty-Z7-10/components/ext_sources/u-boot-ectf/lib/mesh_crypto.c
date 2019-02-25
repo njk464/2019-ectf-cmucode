@@ -457,9 +457,9 @@ int crypto_get_game_header(Game *game, char *game_name){
     // read the game into a buffer
     char* signed_ciphertext = (char*) safe_malloc(unverified_len); //TODO: Check length (+1)
     mesh_read_ext4(game_name, signed_ciphertext, unverified_len);
-    printf("Unverified Len: %d\nVerified Len: %d\nPublic Key:\n", unverified_len, verified_len);
+    printf("Crypto Sign: %d\nVerified Len: %lld\nVerified Int: %d, Public Key:\n", crypto_sign_BYTES, verified_len, verified_len);
     print_hex(sign_public_key, crypto_sign_PUBLICKEYBYTES);
-    printf("\n\n\n\n\nSigned Ciphertext: ");
+    // printf("\n\n\n\n\nSigned Ciphertext: ");
     print_hex(signed_ciphertext, unverified_len);
 
     if(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0){
