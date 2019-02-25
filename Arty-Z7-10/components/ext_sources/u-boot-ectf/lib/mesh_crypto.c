@@ -465,6 +465,7 @@ int crypto_get_game_header(Game *game, char *game_name){
     if(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0){
         printf("Verified signed\n");    
         // Read in the size of the encrypted header. 
+        printf("In data: %lld\n", *verified_ciphertext);
         memcpy(&encrypted_header_len, verified_ciphertext, sizeof(unsigned long long int));
         decrypted_header_len = encrypted_header_len - crypto_secretbox_MACBYTES;
         printf("Decrypted Header Len: %lld\n", decrypted_header_len);
