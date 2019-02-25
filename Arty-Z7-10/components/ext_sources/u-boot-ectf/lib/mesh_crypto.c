@@ -467,7 +467,7 @@ int crypto_get_game_header(Game *game, char *game_name){
         // Read in the size of the encrypted header. 
         memcpy(&encrypted_header_len, verified_ciphertext, sizeof(unsigned long long int));
         decrypted_header_len = encrypted_header_len - crypto_secretbox_MACBYTES;
-        printf("Decrypted Header Len: %d\n", decrypted_header_len);
+        printf("Decrypted Header Len: %lld\n", decrypted_header_len);
         // read in header_nonce
         memcpy(header_nonce, verified_ciphertext + sizeof(unsigned long long int), crypto_secretbox_NONCEBYTES);
         // read only the header
