@@ -8,16 +8,16 @@
  * @params size The requested size to allocate in memory
  * @return void
  */
-void *safe_malloc(size_t size){
-    void *ptr;
-    ptr = malloc(size);
-    if (ptr){
-        return ptr;
-    }
-   //  exit(0);
-   return ptr;
+// void *safe_malloc(size_t size){
+//     void *ptr;
+//     ptr = malloc(size);
+//     if (ptr){
+//         return ptr;
+//     }
+//    //  exit(0);
+//    return ptr;
 
-}
+// }
 
 /*
  * @brief Clears memory before freeing
@@ -26,11 +26,11 @@ void *safe_malloc(size_t size){
  * @params size The size of the memory to be freed
  * @return Void
  */
-void safe_free(void* ptr, size_t size){
-    memset(ptr, 0, size);
-    free(ptr);
-    ptr = NULL;
-}
+// void safe_free(void* ptr, size_t size){
+//     memset(ptr, 0, size);
+//     free(ptr);
+//     ptr = NULL;
+// }
 
 /*
  * @brief TODO: This is a debug function
