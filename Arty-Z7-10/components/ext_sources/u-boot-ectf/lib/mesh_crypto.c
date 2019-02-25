@@ -482,7 +482,7 @@ int crypto_get_game_header(Game *game, char *game_name){
         parsed_game_name = strsep(&decrypted_header,"\n");
         end_game_name = decrypted_header - 2; // This is -2 because I don't want to include the newline
 
-        printf("Game Name: %s\n", game_name);
+        printf("Game Name: %s\n", parsed_game_name);
         printf("Game Version: %s\n", game_version);
         // get everything up to the first '.'. That's the major version
         char *temp_pointer = game_version;
@@ -506,12 +506,12 @@ int crypto_get_game_header(Game *game, char *game_name){
             decrypted_header++; // bypass space
             memset(test_name, 0, MAX_USERNAME_LENGTH);
             memcpy(test_name, start_name, end_name - start_name);
-            
+            printf("Test Name: %s\n", test_name);
             decrypted_header += 96; 
             start_name = decrypted_header;
             memcpy(game->users[num_users], test_name, end_name - start_name);
             game->users[num_users][end_name - start_name] = '\0';
-            printf("User: %s", game->users[num_users]);
+            printf("User: %s\n", game->users[num_users]);
             num_users++;
         }
         game->num_users = num_users;
