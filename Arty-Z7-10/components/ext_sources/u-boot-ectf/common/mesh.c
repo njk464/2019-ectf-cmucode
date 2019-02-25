@@ -390,7 +390,7 @@ int mesh_play(char **args)
     // Since of int, but then writting it to 0x40 bytes? Thats twice as big. 
     char *size_str = (char *)safe_malloc(sizeof(int) + 1);
     sprintf(size_str, "0x%x", (int) casted_size);
-    char * const mw_argv[3] = { "cp", "0x1fc00000", size_str };
+    char * const mw_argv[3] = { "mw.l", "0x1fc00000", size_str };
     cmd_tbl_t* mem_write_tp = find_cmd("mw.l");
     mem_write_tp->cmd(mem_write_tp, 0, 3, mw_argv);
 
