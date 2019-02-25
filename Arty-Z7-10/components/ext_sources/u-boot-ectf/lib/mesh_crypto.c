@@ -521,6 +521,7 @@ int crypto_get_game_header(Game *game, char *game_name){
             decrypted_header += 96; 
             start_name = decrypted_header;
             printf("Next Round: %s\n", start_name);
+            print_hex(start_name, 20);
             num_users++;
         }
         game->num_users = num_users;
