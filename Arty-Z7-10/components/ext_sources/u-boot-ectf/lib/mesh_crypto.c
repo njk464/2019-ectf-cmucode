@@ -40,17 +40,17 @@ void safe_free(void* ptr, size_t size){
  * @return void
  */
 void print_hex(unsigned char *ptr, unsigned int len) {
-      int i;
-      int first = 1;
+    int i;
+    int first = 1;
     for (i = 0; i <= len; i++) {
         if(first) {
             printf("0x%02x", ptr[i]);
             first = 0; 
         } else {
             printf(",0x%02x", ptr[i]);
-          }
+        }
     }
-      printf("\n");
+    printf("\n");
 }
 
 /*
@@ -63,7 +63,6 @@ char *get_salt(char *username){
     unsigned int i;
     for(i = 0; i < MAX_NUM_USERS; i++){
         if(strcmp(username, users[i]) == 0) {    
-            print_hex(salt[i], crypto_pwhash_SALTBYTES);
             return salt[i];
         }
     }
@@ -560,14 +559,11 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
             memset(test_name, 0, MAX_USERNAME_LENGTH);
             memcpy(test_name, start_name, end_name - start_name);
             if(strcmp(test_name, user->name) == 0){
-                printf("Test Name: %s\n User Name: %s\n", test_name, user->name);
-                // TODO: might need to account for a space here
-                strncpy(encrypted_gamekeynonce, decrypted_header, encrypted_gamekeynonce_len);
-                strncpy(user_nonce, decrypted_header + encrypted_gamekeynonce_len, crypto_secretbox_NONCEBYTES);
+                memcpy(encrypted_gamekeynonce, decrypted_header, encrypted_gamekeynonce_len);
+                memcpy(user_nonce, decrypted_header + encrypted_gamekeynonce_len, crypto_secretbox_NONCEBYTES);
                 flag = 1;
                 break;
             } else {
-                // strsep to the end of the line
                 decrypted_header += 96; 
                 start_name = decrypted_header;
             }
@@ -575,10 +571,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         }
         if(flag == 1){
             // Get the user key
-            printf("User: |%s|\nPin: |%s|\nGame name: |%s|\nVersion: |%s|\n", user->name, user->pin, game_name, game_version);
-            gen_userkey(user_key, user->name, user->pin, game_name, game_version);
-            print_hex(user_key, crypto_secretbox_KEYBYTES);
-
+            gen_userkey(user_key, user->name, user->pin, parsed_game_name, game_version);
 
              // decrypt the gamekeynonce
             if(decrypt(user_key, user_nonce, encrypted_gamekeynonce, encrypted_gamekeynonce_len, gamekey_nonce) == -1){
@@ -591,12 +584,10 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
             // message = safe_malloc(decrypted_game_len);
             encrypted_game = safe_malloc(encrypted_game_len);
             memcpy(encrypted_game, enc_header_start + encrypted_header_len, encrypted_game_len);
+            // decrypt and store the game. 
             if(decrypt(gamekey, gamenonce, encrypted_game, encrypted_game_len, game_binary) == -1){
                 return -1;
             }
-
-            //copy decrypted game to pass out
-            // memcpy(game_binary, message, decrypted_game_len);
 
             safe_free(encrypted_header, encrypted_header_len);
             // safe_free(message, decrypted_game_len);

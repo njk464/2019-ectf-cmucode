@@ -631,6 +631,7 @@ void mesh_loop(void) {
     // games are present
     // TODO: Change all of these magic numbers
     strncpy(user.name, "demo", 5);
+    strncpy(user.pin, "00000000", MAX_PIN_LENGTH);
 
     for(int i = 0; i < NUM_DEFAULT_GAMES; ++i)
     {
@@ -1513,6 +1514,7 @@ int mesh_login(User *user) {
     retval = mesh_validate_user(&tmp_user);
     if (!retval) {
         strncpy(user->name, tmp_user.name, MAX_USERNAME_LENGTH);
+        strncpy(user->pin, tmp_user.pin, MAX_PIN_LENGTH);
     } else {
         printf("Login failed. Please try again\n");
     }
