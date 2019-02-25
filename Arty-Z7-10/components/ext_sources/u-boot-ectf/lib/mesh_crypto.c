@@ -504,10 +504,12 @@ int crypto_get_game_header(Game *game, char *game_name){
             if(num_users > MAX_NUM_USERS) {
                 return -1;
             }
+            printf("Diff %d\n", decrypted_header-start_name);
             char* end_name = decrypted_header; 
             printf("End: |%s|\n", end_name);
             decrypted_header++; // bypass space
             memset(test_name, 0, MAX_USERNAME_LENGTH);
+            printf("Length: %d\n", end_name - start_name);
             memcpy(test_name, start_name, end_name - start_name);
             printf("Test Name: |%s|\n", test_name);
             decrypted_header += 96; 
