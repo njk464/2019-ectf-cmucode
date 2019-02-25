@@ -385,6 +385,7 @@ int mesh_play(char **args)
         // This probably means its a bad user.
         return 0;
     }
+    // Since of int, but then writting it to 0x40 bytes? Thats twice as big. 
     char *size_str = (char *)safe_malloc(sizeof(int));
     sprintf(size_str, "0x%x", (int) size);
     char * const mw_argv[3] = { "mw.l", "0x1fc00000", size_str };
@@ -397,12 +398,19 @@ int mesh_play(char **args)
 
     // load_tp->cmd(load_tp, 0, 5, argv);
     // The decimal version of 
-    void * ptr = {'0x1f', '0xc0', '0x00', '0x40'};
-    memcpy(ptr, game_binary, size);
+    //void * ptr = {'0x1f', '0xc0', '0x00', '0x40'};
+    //memcpy(ptr, game_binary, size);
+
+
+    char * const load_argv[3] = { "mw.l", "0x1fc00040", game_binary};
+    cmd_tbl_t* mem_write_game_tp = find_cmd("mw.l");
+    mem_write_game_tp->cmd(mem_write_game_tp, 0, 3, load_argv);
+
 
     // cleanup - this is here because boot may not execute following commands
     free(size_str);
-
+    free(game_binary);
+    
     // boot petalinux
     char * const boot_argv[2] = { "bootm", "0x10000000"};
     cmd_tbl_t* boot_tp = find_cmd("bootm");
