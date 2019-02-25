@@ -460,7 +460,7 @@ int crypto_get_game_header(Game *game, char *game_name){
     printf("Crypto Sign: %d\nVerified Len: %lld\nVerified Int: %d, Public Key:\n", crypto_sign_BYTES, verified_len, verified_len);
     print_hex(sign_public_key, crypto_sign_PUBLICKEYBYTES);
     // printf("\n\n\n\n\nSigned Ciphertext: ");
-    print_hex(signed_ciphertext, unverified_len);
+    // print_hex(signed_ciphertext, unverified_len);
 
     if(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0){
         printf("Verified signed\n");    
