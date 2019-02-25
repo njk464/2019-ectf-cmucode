@@ -469,12 +469,10 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         return -1;
     }
     free(verified_ciphertext);
-    return decryped_game_len;
+    return decrypted_game_len;
 }
 
 int crypto_get_game(char *game_binary, char *game_name, User* user){
-int i = 0;
-    int j = 0;
     int num_users = 0;
     loff_t unverified_len;
     loff_t verified_len;
@@ -491,7 +489,6 @@ int i = 0;
     char *start_name;
     char test_name[MAX_USERNAME_LENGTH];
     loff_t encrypted_game_len;
-    loff_t decrypted_game_len;
     loff_t encrypted_gamekeynonce_len;
     encrypted_gamekeynonce_len = crypto_secretbox_KEYBYTES + crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES;
     char *enc_header_start;
@@ -502,6 +499,8 @@ int i = 0;
     char encrypted_gamekeynonce[encrypted_gamekeynonce_len];
     char gamekey_nonce[crypto_secretbox_NONCEBYTES + crypto_secretbox_KEYBYTES];
     char *message;
+    int flag = 0;
+    char* encrypted_game;
 
 
     if (sodium_init() < 0) {
@@ -555,7 +554,7 @@ int i = 0;
             decrypted_header++; // bypass space
             memset(test_name, 0, MAX_USERNAME_LENGTH);
             memcpy(test_name, start_name, end_name - start_name);
-            if(strcmp(test_name, username) == 0){
+            if(strcmp(test_name, user->name) == 0){
                 // TODO: might need to account for a space here
                 strncpy(encrypted_gamekeynonce, decrypted_header, encrypted_gamekeynonce_len);
                 strncpy(user_nonce, decrypted_header + encrypted_gamekeynonce_len, crypto_secretbox_NONCEBYTES);
