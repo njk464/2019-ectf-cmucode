@@ -84,7 +84,8 @@ void gen_userkey(char *key, char* name, char* pin, char* game_name, char* versio
     int MAX_PASSWORD_SIZE = strlen(name) + strlen(pin) + strlen(game_name) + strlen(version) + crypto_pwhash_SALTBYTES ; 
     char password[MAX_PASSWORD_SIZE];
     memset(key, 0, crypto_hash_sha256_BYTES);
-    sprintf(password, "%s%s%s%s%s", name, pin, game_name, version, get_salt(name));
+    sprintf(password, "%s%s%s%s", name, pin, game_name, version);
+    memcpy(password + MAX_PASSWORD_SIZE - crypto_pwhash_SALTBYTES, get_salt(name), crypto_pwhash_SALTBYTES);
     crypto_hash_sha256((unsigned char*) key, 
                                  (const unsigned char *) password, 
                                  (unsigned long long) MAX_PASSWORD_SIZE);
