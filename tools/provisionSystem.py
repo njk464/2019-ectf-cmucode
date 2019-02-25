@@ -92,6 +92,7 @@ def write_mesh_users_h(users, f):
 struct MeshUser {{
     char username[MAX_USERNAME_LENGTH + 1];
     char hash[61];
+    char pin[MAX_PIN_LENGTH + 1];
 }};
 
 static struct MeshUser mesh_users[] = {{
@@ -211,6 +212,7 @@ def write_factory_secrets(users, f, h):
     salt_array.append(['demo', salt])
     
     header_key, header_nonce = gen_key_nonce()
+    flash_key, flash_nonce = gen_key_nonce()
     pk, sk = gen_keypair()
     f.write(base64.b64encode(header_key).decode() + '\n')
     f.write(base64.b64encode(sk).decode() + '\n')
@@ -224,6 +226,11 @@ def write_factory_secrets(users, f, h):
     for i in header_key[:-1]:
         header_key_bytes += '0x%x, ' % i
     header_key_bytes += '0x%x' % header_key[-1]
+
+    flash_key_bytes = ""
+    for i in flash_key[:-1]:
+        flash_key_bytes += '0x%x, ' % i
+    flash_key_bytes += '0x%x' % flash_key[-1]
 
     header_nonce_bytes = ""
     for i in header_nonce[:-1]:
@@ -247,6 +254,8 @@ static char sign_public_key[] = {"""
     s += pk_bytes
     s += """};\nstatic char header_key[] = {"""
     s += header_key_bytes
+    s += """};\nstatic char flash_key[] = {"""
+    s += flash_key_bytes
     s += "};\nstatic char salt[MAX_NUM_USERS][SALT_LENGTH] = {\n"
 
     for entry in salt_array[:-1]:
@@ -352,6 +361,12 @@ def main():
     # Write the default games file
     write_mesh_default_h(args.DEFAULT_FILE, default_games_hpath)
     print("Generated default_games.h file")
+    
+    # write factory secrets
+    write_factory_secrets(secret_users, f_factory_secrets, f_secret_header)
+    f_factory_secrets.close()
+    f_secret_header.close()
+    print("Generated FactorySecrets file: %s\nGenerated SecretHeader file: %s" % (os.path.join(gen_path, factory_secrets_fn), secret_header_fn))
 
     # write factory secrets
     write_factory_secrets(secret_users, f_factory_secrets, f_secret_header)

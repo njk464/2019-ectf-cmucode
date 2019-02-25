@@ -4134,3 +4134,4 @@ CONFIG_libsodium=y
 #
 # PetaLinux RootFS Settings
 #
+CONFIG_ROOTFS_ROOT_PASSWD="ectf-cmu-temp-root-passwd"

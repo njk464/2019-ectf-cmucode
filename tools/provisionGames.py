@@ -69,9 +69,7 @@ def encrypt_header(user_array, name, version, game_users, gamekey, gamenonce, he
     header_nonce = pysodium.randombytes(pysodium.crypto_secretbox_NONCEBYTES)
     encrypted_header = encrypt(header_key, header_nonce, header)
     # append len i
-    print(header)
     header_len = pack('Q', len(encrypted_header))
-    print(header_len)
     encrypted_header = header_len + header_nonce + encrypted_header
     return encrypted_header
 
