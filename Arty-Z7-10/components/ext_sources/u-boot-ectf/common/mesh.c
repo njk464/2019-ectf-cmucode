@@ -324,7 +324,8 @@ int mesh_play(char **args)
     }
 
     Game game;
-    mesh_get_game_header(&game, args[1]);
+    // mesh_get_game_header(&game, args[1]);
+    crypto_get_game_header(&game, args[1]);
 
     if (mesh_check_downgrade(args[1], game.major_version, game.minor_version) == 1){
         printf("You are not allowed to play an older version of the game once a newer one is installed.\n");
@@ -755,7 +756,9 @@ int mesh_ls_iterate_dir(struct ext2fs_node *dir, char *fname)
                 switch (type) {
                 case FILETYPE_REG:
                     // only print name if the user is in valid install list
-                    mesh_get_game_header(&game, filename);
+                    // mesh_get_game_header(&game, filename);
+                    crypto_get_game_header(&game, filename);
+                    //TODO: Error numbers
                     if (mesh_check_user(&game)){
                         printf("%d      ", game_num++);
                         printf("%s\n", filename);
