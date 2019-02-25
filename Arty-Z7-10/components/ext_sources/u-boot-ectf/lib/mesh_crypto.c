@@ -502,6 +502,7 @@ int crypto_get_game_header(Game *game, char *game_name){
         // Loop though the header
         while((decrypted_header = strstr(decrypted_header," ")) != NULL ){
             if(num_users > MAX_NUM_USERS) {
+                printf("Max users reached\n");
                 return -1;
             }
             printf("Diff %d\n", decrypted_header-start_name);
@@ -517,6 +518,7 @@ int crypto_get_game_header(Game *game, char *game_name){
             printf("User: |%s|\n", game->users[num_users]);
             decrypted_header += 96; 
             start_name = decrypted_header;
+            printf("Next Round: %s\n", start_name);
             num_users++;
         }
         game->num_users = num_users;
