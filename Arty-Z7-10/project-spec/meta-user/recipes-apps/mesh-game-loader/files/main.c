@@ -81,7 +81,7 @@ int main(int argc, char **argv)
 
     // write the game
     //written = fwrite(map_tmp, sizeof(char), gameSize - (map_tmp - map), gameFp);
-    written = fwrite(map_tmp, sizeof(char), gameSize, gameFp);
+    written = fwrite(map, sizeof(char), gameSize, gameFp);
 
     if (ferror(gameFp)) {
         printf("fwrite error.\r\n");
