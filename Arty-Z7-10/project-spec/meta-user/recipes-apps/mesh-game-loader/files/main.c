@@ -74,13 +74,14 @@ int main(int argc, char **argv)
     map += 0x40;
 
     // dump first 3 header lines of the game so it is executable
-    map_tmp = map;
+    /*map_tmp = map;
     for (int i=0; i < 3; i++){
         map_tmp = skip_line(map_tmp);   
-    }
+    }*/
 
     // write the game
-    written = fwrite(map_tmp, sizeof(char), gameSize - (map_tmp - map), gameFp);
+    //written = fwrite(map_tmp, sizeof(char), gameSize - (map_tmp - map), gameFp);
+    written = fwrite(map, sizeof(char), gameSize, gameFp);
 
     if (ferror(gameFp)) {
         printf("fwrite error.\r\n");

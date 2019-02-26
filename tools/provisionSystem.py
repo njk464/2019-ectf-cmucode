@@ -206,6 +206,11 @@ def write_factory_secrets(users, f, h):
         salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
         f.write(user[0]+ ' '+ user[1] + ' '+ base64.b64encode(salt).decode() + '\n')
         salt_array.append([user[0], salt])
+
+    salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
+    f.write('demo'+ ' '+ '00000000' + ' '+ base64.b64encode(salt).decode() + '\n')
+    salt_array.append(['demo', salt])
+    
     header_key, header_nonce = gen_key_nonce()
     flash_key, flash_nonce = gen_key_nonce()
     pk, sk = gen_keypair()
@@ -327,7 +332,7 @@ def main():
         exit(2)
 
     try:
-        f_secret_header = open(secret_header_fn, "w+")
+        f_secret_header = open(os.path.join(gen_path, secret_header_fn), "w+")
     except Exception as e:
         print("Unable to open secret header file: %s" % (e,))
         exit(2)
@@ -362,7 +367,7 @@ def main():
     f_factory_secrets.close()
     f_secret_header.close()
     print("Generated FactorySecrets file: %s\nGenerated SecretHeader file: %s" % (os.path.join(gen_path, factory_secrets_fn), secret_header_fn))
-
+    
     # build MES.bin # Doesn't actually create the file? Makes that in package
     build_images()
 
@@ -370,8 +375,6 @@ def main():
     write_system_image_bif(f_system_image)
     f_system_image.close()
     print("Generated SystemImage file: %s" % (os.path.join(gen_path, system_image_fn)))
-
-
 
     exit(0)
 
