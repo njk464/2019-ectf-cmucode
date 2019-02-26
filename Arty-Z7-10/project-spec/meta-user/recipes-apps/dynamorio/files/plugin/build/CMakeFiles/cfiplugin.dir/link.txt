@@ -1,0 +1,1 @@
+/usr/bin/cc -fPIC     -O3   -DARM_32 -DLINUX -fno-stack-protector  -Xlinker -z -Xlinker now -fPIC -shared -lgcc -Wl,--hash-style=both -shared -Wl,-soname,libcfiplugin.so -o libcfiplugin.so CMakeFiles/cfiplugin.dir/cfi_plugin.c.o /home/ubuntu/dynamorio_bin/DynamoRIO-ARM-Linux-EABIHF-7.1.0-1/lib32/debug/libdynamorio.so 

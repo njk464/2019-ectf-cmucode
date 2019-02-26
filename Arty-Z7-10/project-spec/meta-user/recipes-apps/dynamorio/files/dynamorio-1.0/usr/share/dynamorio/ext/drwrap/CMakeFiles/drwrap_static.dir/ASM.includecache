@@ -1,0 +1,14 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/ubuntu/dynamorio_bin/HOTPATCH/dynamorio/ext/drwrap/drwrap_asm_arm.asm
+cpp2asm_defines.h
+/home/ubuntu/dynamorio_bin/HOTPATCH/dynamorio/ext/drwrap/cpp2asm_defines.h
+
+cmake/cpp2asm_defines.h
+

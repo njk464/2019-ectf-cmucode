@@ -1,0 +1,16 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/ubuntu/dynamorio_bin/HOTPATCH/dynamorio/ext/drsyms/demangle.cc
+stdio.h
+-
+demangle.h
+/home/ubuntu/dynamorio_bin/HOTPATCH/dynamorio/ext/drsyms/demangle.h
+
+/home/ubuntu/dynamorio_bin/HOTPATCH/dynamorio/ext/drsyms/demangle.h
+

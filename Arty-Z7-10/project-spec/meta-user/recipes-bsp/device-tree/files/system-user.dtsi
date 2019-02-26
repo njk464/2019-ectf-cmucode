@@ -5,7 +5,8 @@
 	compatible = "digilent,zynq-artyz7", "xlnx,zynq-7000";
 
 	chosen {
-		bootargs = "console=ttyPS0,115200 console=tty1 earlyprintk uio_pdrv_genirq.of_id=generic-uio";
+        bootargs = "console=tty1 earlyprintk uio_pdrv_genirq.of_id=generic-uio";
+		//bootargs = "console=ttyPS0,115200 console=tty1 earlyprintk uio_pdrv_genirq.of_id=generic-uio";
 	};
 
 	usb_phy0: usb_phy@0 {
