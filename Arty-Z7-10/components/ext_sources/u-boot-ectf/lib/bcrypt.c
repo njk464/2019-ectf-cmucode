@@ -51,8 +51,6 @@
 #define	BCRYPT_SALTSPACE	(7 + (BCRYPT_MAXSALT * 4 + 2) / 3 + 1)
 #define	BCRYPT_HASHSPACE	61
 
-char   *bcrypt_gensalt(u_int8_t);
-
 static int encode_base64(char *, const u_int8_t *, size_t);
 static int decode_base64(u_int8_t *, size_t, const char *);
 
@@ -179,25 +177,6 @@ inval:
 	return -1;
 }
 
-/*
- * user friendly functions
- */
-int
-bcrypt_newhash(const char *pass, int log_rounds, char *hash, size_t hashlen)
-{
-	char salt[BCRYPT_SALTSPACE];
-
-	if (bcrypt_initsalt(log_rounds, salt, sizeof(salt)) != 0)
-		return -1;
-
-	if (bcrypt_hashpass(pass, salt, hash, hashlen) != 0)
-		return -1;
-
-	explicit_bzero(salt, sizeof(salt));
-	return 0;
-}
-DEF_WEAK(bcrypt_newhash);
-
 
 int
 timingsafe_bcmp(const void *b1, const void *b2, size_t n)
@@ -209,7 +188,6 @@ timingsafe_bcmp(const void *b1, const void *b2, size_t n)
 		ret |= *p1++ ^ *p2++;
 	return (ret != 0);
 }
-DEF_WEAK(timingsafe_bcmp);
 
 int
 bcrypt_checkpass(const char *pass, const char *goodhash)
@@ -223,11 +201,22 @@ bcrypt_checkpass(const char *pass, const char *goodhash)
 		errno = EACCES;
 		return -1;
 	}
+	// second check to help prevent clock glitching
+	if (strlen(hash) != strlen(goodhash) ||
+	    timingsafe_bcmp(hash, goodhash, strlen(goodhash)) != 0) {
+		errno = EACCES;
+		return -1;
+	}
 
-	explicit_bzero(hash, sizeof(hash));
-	return 0;
+	if (strlen(hash) == strlen(goodhash) && timingsafe_bcmp(hash, goodhash, strlen(goodhash)) == 0) {
+		explicit_bzero(hash, sizeof(hash));
+		return 0;
+
+	}
+
+	errno = EACCES;
+	return -1;
 }
-DEF_WEAK(bcrypt_checkpass);
 
 
 /*
@@ -260,7 +249,7 @@ static int
 decode_base64(u_int8_t *buffer, size_t len, const char *b64data)
 {
 	u_int8_t *bp = buffer;
-	const u_int8_t *p = b64data;
+	const u_int8_t *p = (u_int8_t *)b64data;
 	u_int8_t c1, c2, c3, c4;
 
 	while (bp < buffer + len) {
@@ -302,7 +291,7 @@ decode_base64(u_int8_t *buffer, size_t len, const char *b64data)
 static int
 encode_base64(char *b64buffer, const u_int8_t *data, size_t len)
 {
-	u_int8_t *bp = b64buffer;
+	u_int8_t *bp = (u_int8_t *)b64buffer;
 	const u_int8_t *p = data;
 	u_int8_t c1, c2;
 
@@ -330,16 +319,3 @@ encode_base64(char *b64buffer, const u_int8_t *data, size_t len)
 	*bp = '\0';
 	return 0;
 }
-
-
-char *
-bcrypt(const char *pass, const char *salt)
-{
-	static char    gencrypted[BCRYPT_HASHSPACE];
-
-	if (bcrypt_hashpass(pass, salt, gencrypted, sizeof(gencrypted)) != 0)
-		return NULL;
-
-	return gencrypted;
-}
-DEF_WEAK(bcrypt);

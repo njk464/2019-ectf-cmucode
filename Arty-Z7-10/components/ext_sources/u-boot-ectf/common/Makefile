@@ -156,10 +156,6 @@ obj-$(CONFIG_IO_TRACE) += iotrace.o
 obj-y += memsize.o
 obj-y += stdio.o
 
-# bcrypt library
-obj-y += blf.o
-obj-y += bcrypt.o
-
 # This option is not just y/n - it can have a numeric value
 ifdef CONFIG_FASTBOOT_FLASH
 obj-y += image-sparse.o
