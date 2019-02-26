@@ -7,10 +7,8 @@ start ()
     echo 2 > /proc/sys/kernel/randomize_va_space
 
     # we need to decrypt the file to a random file name
-    # TODO use temp file
-    #TMP_FILE=`mktemp`
+    TMP_FILE=`mktemp`
     
-    TMP_FILE=/usr/bin/game
     touch $TMP_FILE
 
     # shell script for drrun stuff
@@ -36,7 +34,7 @@ start ()
     stty -F /dev/ttyPS0 speed 115200
 
     # load the game in ramfs 
-    mesh-game-loader
+    mesh-game-loader $TMP_FILE
     
     # update permissions
     chown ectf:ectf $TMP_FILE
