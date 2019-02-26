@@ -4130,9 +4130,9 @@ CONFIG_uioctl=y
 #
 # user packages 
 #
+CONFIG_libsodium=y
 CONFIG_rng-tools=y
 CONFIG_wipe=y
-CONFIG_libsodium=y
 
 #
 # PetaLinux RootFS Settings
