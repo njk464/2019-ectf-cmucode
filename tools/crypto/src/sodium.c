@@ -1,8 +1,14 @@
-#include <linux/string.h>
-#include <sodium.h>
-#include <linux/ctype.h>
+// TODO:  these headers are temp for local testing, remove after port to uboot
+
+#include <stdint.h>
+#include <string.h>
+
+//#include <linux/string.h>
+//#include <linux/ctype.h>
 #include <stdlib.h>
-#include <common.h>
+#include <sodium.h>
+//#include <common.h>
+
 
 int
 crypto_stream_salsa20(unsigned char *c, unsigned long long clen,
@@ -1204,15 +1210,14 @@ crypto_hash_sha512(unsigned char *out, const unsigned char *in,
     return 0;
 }
 
-int
+int 
 crypto_hash_sha256(unsigned char *out, const unsigned char *in, 
                    unsigned long long inlen)
 {
-    unsigned char sha512out[64];
-    crypto_hash_sha512(sha512out, in, inlen);
-    memcpy(out, sha512out, 32);
-
-    return 1;
+     unsigned char sha512out[64];
+     crypto_hash_sha512(sha512out, in, inlen);
+     memcpy(out, sha512out, 32);
+     return 1;
 }
 
 /**************************************************************
@@ -2193,7 +2198,7 @@ ge25519_double_scalarmult_vartime(ge25519_p2 *r, const unsigned char *a,
                                   const ge25519_p3 *A, const unsigned char *b)
 {
     static const ge25519_precomp Bi[8] = { 
-        # include "base2.h"
+        # include <base2.h>
     };
 
     signed char    aslide[256];

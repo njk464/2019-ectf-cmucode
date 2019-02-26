@@ -9,13 +9,13 @@
 #include <spi_flash.h>
 #include <command.h>
 #include <os.h>
-#include <sodium.h>
 
 #include <mesh.h>
 #include <mesh_users.h>
 #include <secret.h>
 #include <default_games.h>
 #include <bcrypt.h>
+#include <mesh_crypto.h>
 
 #define MESH_TOK_BUFSIZE 64
 #define MESH_TOK_DELIM " \t\r\n\a"
@@ -366,34 +366,61 @@ int mesh_play(char **args)
     }
 
     Game game;
-    mesh_get_game_header(&game, args[1]);
+    loff_t size = 0;
+    // mesh_get_game_header(&game, args[1]);
+    if((size = crypto_get_game_header(&game, args[1])) == -1) {
+        return 0;
+    }
 
     if (mesh_check_downgrade(args[1], game.major_version, game.minor_version) == 1){
         printf("You are not allowed to play an older version of the game once a newer one is installed.\n");
         return 0;
     }
+    
+    // write game size to memory, 64 bytes
 
-    loff_t size = 0;
+    char *game_binary = safe_malloc(size);
 
-    // get size of binary
-    size = mesh_size_ext4(args[1]);
-
-    // write game size to memory
-    char *size_str = (char *)safe_malloc(sizeof(int));
-    sprintf(size_str, "0x%x", (int) size);
-    char * const mw_argv[3] = { "mw.l", "0x1fc00000", size_str };
+    if(crypto_get_game(game_binary, args[1], &user) == -1){
+        // This probably means its a bad user.
+        return 0;
+    }
+    
+    int casted_size = (int) size;
+    // Since of int, but then writting it to 0x40 bytes? Thats twice as big. 
+    char *size_str = (char *)safe_malloc(sizeof(int) + 1);
+    sprintf(size_str, "0x%x", (int) casted_size);
+    char * const mw_argv[3] = { "cp", "0x1fc00000", size_str };
     cmd_tbl_t* mem_write_tp = find_cmd("mw.l");
     mem_write_tp->cmd(mem_write_tp, 0, 3, mw_argv);
 
     // load game binary into memory
-    char * const argv[5] = { "ext4load", "mmc", "0:2", "0x1fc00040", args[1] };
-    cmd_tbl_t* load_tp = find_cmd("ext4load");
+    // char * const argv[5] = { "ext4load", "mmc", "0:2", "0x1fc00040", args[1]};
+    // cmd_tbl_t* load_tp = find_cmd("ext4load");
 
-    load_tp->cmd(load_tp, 0, 5, argv);
+    // load_tp->cmd(load_tp, 0, 5, argv);
+    // The decimal version of 
+    //void * ptr = {'0x40', '0x00', '0xc0', '0x1f'};
+
+    char *from_str = (char *)safe_malloc(sizeof(void *) + 1);
+    sprintf(from_str, "0x%p", (void *) game_binary);
+    char * const cp_argv[4] = { "cp", from_str, "0x1fc00040",  size_str };
+    cmd_tbl_t* cp_tp = find_cmd("cp");
+    cp_tp->cmd(cp_tp, 0, 4, cp_argv);
+
+
+
+    //char * const load_argv[3] = { "mw", "0x1fc00040", game_binary};
+    //cmd_tbl_t* mem_write_game_tp = find_cmd("mw");
+    //mem_write_game_tp->cmd(mem_write_game_tp, 0, 3, load_argv);
+
 
     // cleanup - this is here because boot may not execute following commands
+    free(from_str);
     free(size_str);
-
+    memset(game_binary, 0, size);
+    free(game_binary);
+    
     // boot petalinux
     char * const boot_argv[2] = { "bootm", "0x10000000"};
     cmd_tbl_t* boot_tp = find_cmd("bootm");
@@ -422,7 +449,6 @@ int mesh_query(char **args)
 int mesh_install(char **args)
 {
     /* Install the game */
-
     int validated = 0;
     if ((validated = mesh_install_validate_args(args))){
         return validated;
@@ -623,6 +649,7 @@ void mesh_loop(void) {
     // games are present
     // TODO: Change all of these magic numbers
     strncpy(user.name, "demo", 5);
+    strncpy(user.pin, "00000000", MAX_PIN_LENGTH);
 
     for(int i = 0; i < NUM_DEFAULT_GAMES; ++i)
     {
@@ -798,7 +825,9 @@ int mesh_ls_iterate_dir(struct ext2fs_node *dir, char *fname)
                 switch (type) {
                 case FILETYPE_REG:
                     // only print name if the user is in valid install list
-                    mesh_get_game_header(&game, filename);
+                    // mesh_get_game_header(&game, filename);
+                    crypto_get_game_header(&game, filename);
+                    //TODO: Error numbers
                     if (mesh_check_user(&game)){
                         printf("%d      ", game_num++);
                         printf("%s\n", filename);
@@ -1074,64 +1103,66 @@ int mesh_check_downgrade(char *game_name, unsigned int major_version, unsigned i
 /*
     This function extract the game info from the header of a game file.
 */
-void mesh_get_game_header(Game *game, char *game_name){
-    loff_t game_size;
-    int i = 0;
-    int j = 0;
+// void mesh_get_game_header(Game *game, char *game_name){
+//     loff_t game_size;
+//     int i = 0;
+//     int j = 0;
 
-    // get the size of the game
-    game_size = mesh_size_ext4(game_name);
+//     // get the size of the game
+//     game_size = mesh_size_ext4(game_name);
+//     printf("game_size: %lld\n", game_size);
+//     printf("game name: %s\n", game_name);
 
-    // read the game into a buffer
-    char* game_buffer = (char*) safe_malloc(game_size + 1);
-    mesh_read_ext4(game_name, game_buffer, game_size);
+//     // read the game into a buffer
+//     char* game_buffer = (char*) malloc(game_size + 1);
+//     mesh_read_ext4(game_name, game_buffer, game_size);
 
-    // get the version, located on the first line. will always be major.minor
+//     // get the version, located on the first line. will always be major.minor
 
-    // remove the string "version"
-    strtok(game_buffer, ":");
-    // get everything up to the first '.'. That's the major version
-    char* major_version_str = strtok(NULL, ".");
-    // get after the '.'. That's the minor version
-    char* minor_version_str = strtok(NULL, "\n");
+//     // remove the string "version"
+//     strtok(game_buffer, ":");
+//     // get everything up to the first '.'. That's the major version
+//     char* major_version_str = strtok(NULL, ".");
+//     // get after the '.'. That's the minor version
+//     char* minor_version_str = strtok(NULL, "\n");
 
-    // get the name, located after "name:"
-    char* name = strtok(NULL, ":");
-    name = strtok(NULL, "\n");
+//     // get the name, located after "name:"
+//     char* name = strtok(NULL, ":");
+//     name = strtok(NULL, "\n");
 
-    // get the users, located after "users:"
-    char* users = strtok(NULL, ":");
-    users = strtok(NULL, "\n");
+//     // get the users, located after "users:"
+//     char* users = strtok(NULL, ":");
+//     users = strtok(NULL, "\n");
 
-    // copy major and minor version into struct
-    game->major_version = simple_strtoul(major_version_str, NULL, 10);
-    game->minor_version = simple_strtoul(minor_version_str, NULL, 10);
+//     // copy major and minor version into struct
+//     game->major_version = simple_strtoul(major_version_str, NULL, 10);
+//     game->minor_version = simple_strtoul(minor_version_str, NULL, 10);
 
-    // copy name
-    for (i=0; i<MAX_GAME_LENGTH && name[i] != '\0'; i++){
-        game->name[i] = name[i];
-    }
-    game->name[i] = '\0';
+//     // copy name
+//     for (i=0; i<MAX_GAME_LENGTH && name[i] != '\0'; i++){
+//         game->name[i] = name[i];
+//     }
+//     game->name[i] = '\0';
 
-    // copy users
-    int strplace = 0;
-    for (i=0; i<MAX_NUM_USERS && users[strplace] != '\0'; i++){
-        for (j=0; j<=MAX_USERNAME_LENGTH && users[strplace] != ' ' && users[strplace] != '\0'; j++){
-            game->users[i][j] = users[strplace++];
-        }
+//     // copy users
+//     int strplace = 0;
+//     for (i=0; i<MAX_NUM_USERS && users[strplace] != '\0'; i++){
+//         for (j=0; j<=MAX_USERNAME_LENGTH && users[strplace] != ' ' && users[strplace] != '\0'; j++){
+//             game->users[i][j] = users[strplace++];
+//         }
 
-        // increment past space if you are there
-        if (users[strplace] == ' '){
-            strplace++;
-        }
+//         // increment past space if you are there
+//         if (users[strplace] == ' '){
+//             strplace++;
+//         }
 
-        // null terminate user
-        game->users[i][j] = '\0';
-    }
-    game->num_users = i;
+//         // null terminate user
+//         game->users[i][j] = '\0';
+//     }
+//     game->num_users = i;
 
-    free(game_buffer);
-}
+//     free(game_buffer);
+// }
 /*
  *  TODO: Change to magic values.
     This function reads in the specified game and ensures that the user is
@@ -1153,7 +1184,8 @@ int mesh_valid_install(char *game_name){
     }
 
     Game game;
-    mesh_get_game_header(&game, game_name);
+    // mesh_get_game_header(&game, game_name);
+    crypto_get_game_header(&game, game_name);
 
     if (!mesh_check_user(&game)){
         return 2;
@@ -1180,7 +1212,6 @@ int mesh_valid_install(char *game_name){
 int mesh_install_validate_args(char **args){
     // ensure a game name is listed
     int errno = 0;
-
     int argv = mesh_get_argv(args);
     if (argv < 2){
         printf("No game name specified.\n");
@@ -1501,6 +1532,7 @@ int mesh_login(User *user) {
     retval = mesh_validate_user(&tmp_user);
     if (!retval) {
         strncpy(user->name, tmp_user.name, MAX_USERNAME_LENGTH);
+        strncpy(user->pin, tmp_user.pin, MAX_PIN_LENGTH);
     } else {
         printf("Login failed. Please try again\n");
     }

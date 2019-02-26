@@ -1,6 +1,7 @@
 #ifndef __MESH_H__
 #define __MESH_H__
 
+#include <common.h>
 #include <ext4fs.h>
 
 #define MAX_STR_LEN 64
