@@ -110,8 +110,6 @@ int mesh_play(char **args);
 int mesh_query(char **args);
 int mesh_install(char **args);
 int mesh_uninstall(char **args);
-int mesh_dump_flash(char **args);
-int mesh_reset_flash(char **args);
 int mesh_login(User *user) ;
 void mesh_loop(void);
 
