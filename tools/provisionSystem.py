@@ -200,16 +200,19 @@ def write_factory_secrets(users, f, h):
     f: open file to write the factory secrets to
     h: open file to write data to pass along to shell
     """
-
+    flag = 0
     salt_array = []
     for user in users:
+        if user == 'demo':
+            flag = 1
         salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
         f.write(user[0]+ ' '+ user[1] + ' '+ base64.b64encode(salt).decode() + '\n')
         salt_array.append([user[0], salt])
 
-    salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
-    f.write('demo'+ ' '+ '00000000' + ' '+ base64.b64encode(salt).decode() + '\n')
-    salt_array.append(['demo', salt])
+    if flag == 0:
+        salt = os.urandom(pysodium.crypto_pwhash_SALTBYTES)
+        f.write('demo'+ ' '+ '00000000' + ' '+ base64.b64encode(salt).decode() + '\n')
+        salt_array.append(['demo', salt])
     
     header_key, header_nonce = gen_key_nonce()
     flash_key, flash_nonce = gen_key_nonce()
