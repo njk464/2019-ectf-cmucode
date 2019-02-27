@@ -20,6 +20,8 @@ system_image_fn = "SystemImage.bif"
 factory_secrets_fn = "FactorySecrets.txt"
 # Path to secrets header file
 secret_header_fn = os.environ["ECTF_UBOOT"] + "/include/secret.h"
+# number of rounds bcrypt uses
+bcrypt_rounds=10
 
 def gen_key_nonce():
     key = pysodium.randombytes(pysodium.crypto_secretbox_KEYBYTES)
@@ -48,7 +50,7 @@ def validate_users(lines):
     for line in lines:
         for m in [re.match(reg, line)]:
             if m:
-                hashed_pass = bcrypt.hashpw(m.group(2).encode('utf-8'), bcrypt.gensalt(rounds=8)).decode("utf-8")
+                hashed_pass = bcrypt.hashpw(m.group(2).encode('utf-8'), bcrypt.gensalt(rounds=bcrypt_rounds)).decode("utf-8")
                 users.append((m.group(1), hashed_pass))
 
     # return a list of tuples of (username, hashed_pin)
@@ -354,7 +356,7 @@ def main():
             exit(2)
 
     # Add the demo user, which must always exist, per the rules
-    demo_hash = bcrypt.hashpw("00000000".encode('utf-8'), bcrypt.gensalt(rounds=8)).decode("utf-8")
+    demo_hash = bcrypt.hashpw("00000000".encode('utf-8'), bcrypt.gensalt(rounds=bcrypt_rounds)).decode("utf-8")
     users.append(("demo", demo_hash))
     # write mesh users to uboot header
     write_mesh_users_h(users, f_mesh_users_out)
