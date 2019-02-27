@@ -454,7 +454,8 @@ int mesh_install(char **args)
         return validated;
     }
 
-    char* full_game_name = args[1];
+    char* full_game_name = safe_malloc(MAX_GAME_LENGTH + 1);
+    strncpy(full_game_name, args[1], MAX_GAME_LENGTH);
 
     // get the short name of the game (the stuff before the "-")
     char* short_game_name = strtok(full_game_name, "-");
@@ -507,6 +508,7 @@ int mesh_install(char **args)
             }
             memcpy(next, &row, sizeof(struct games_tbl_row));
             mesh_write_install_table();
+            safe_free(full_game_name, MAX_GAME_LENGTH + 1);
             return 0;
         }
     }
@@ -519,6 +521,7 @@ int mesh_install(char **args)
     mesh_write_install_table();
 
     printf("%s was successfully installed for %s\n", row.game_name, row.user_name);
+    safe_free(full_game_name, MAX_GAME_LENGTH + 1);
     return 0;
 }
 
@@ -655,11 +658,26 @@ void mesh_loop(void) {
     {
         char* install_args[] = {"install", default_games[i], '\0'};
         int ret_code = mesh_install(install_args);
+        // only continued if the game install was successful or the game
+        // was already installed
         if (ret_code != 0 && ret_code != 6 && ret_code != 7)
         {
             printf("Error detected while installing default games\n");
             return;
         }
+        
+        // additional check to make sure that the game is really installed
+        Game game;
+
+        if (crypto_get_game_header(&game, default_games[i]) == -1 ||
+                !mesh_check_user(&game) ||
+                !(mesh_game_installed(default_games[i]) || 
+                mesh_check_downgrade(default_games[i], game.major_version, game.minor_version)))
+        {
+            printf("Error detected while installing default games\n");
+            return;
+        }
+
     }
 
     // hange tro pin and suername size other overflow.
@@ -1185,7 +1203,9 @@ int mesh_valid_install(char *game_name){
 
     Game game;
     // mesh_get_game_header(&game, game_name);
-    crypto_get_game_header(&game, game_name);
+    if (crypto_get_game_header(&game, game_name) == -1) {
+        return 6;
+    }
 
     if (!mesh_check_user(&game)){
         return 2;
@@ -1251,6 +1271,8 @@ int mesh_install_validate_args(char **args){
         case 5 :
             printf("No more games can be installed\n");
             return 8;
+        case 6 :
+            printf("Unable to verify signature on game %s\n", game_name);
         default :
             printf("Unknown error installing game.\n");
             return -1;
