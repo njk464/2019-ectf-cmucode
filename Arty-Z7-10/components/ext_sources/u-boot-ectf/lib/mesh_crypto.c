@@ -214,6 +214,20 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         parsed_game_name = strsep(&decrypted_header,"\n");
         end_game_name = decrypted_header - 2; // This is -2 because I don't want to include the newline
 
+        int game_name_len = snprintf(NULL, 0, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version) + 1;
+        if (game_name_len <= 0){
+            printf("Corrupted game name value.");
+            return -1;
+        }
+        // compare the header to provided name
+        char* full_name = (char*) safe_malloc(game_name_len);
+        full_name_from_short_name(full_name, row);
+
+        if (strncmp(full_name, game_name, game_name_len) != 0){
+            print("Header data and file name do not match.");
+            return -1;
+        }
+
         // get everything up to the first '.'. That's the major version
         char *temp_pointer = game_version;
         // get after the '.'. That's the minor version
@@ -353,6 +367,20 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         strsep(&decrypted_header,":");
         parsed_game_name = strsep(&decrypted_header,"\n");
         end_game_name = decrypted_header - 2; // this is -2 because I don't want to include the newline
+
+        int game_name_len = snprintf(NULL, 0, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version) + 1;
+        if (game_name_len <= 0){
+            printf("Corrupted game name value.");
+            return -1;
+        }
+        // compare the header to provided name
+        char* full_name = (char*) safe_malloc(game_name_len);
+        full_name_from_short_name(full_name, row);
+
+        if (strncmp(full_name, game_name, game_name_len) != 0){
+            print("Header data and file name do not match.");
+            return -1;
+        }
 
         start_name = decrypted_header; 
         // loop though the header ensure extract encrypted game key + nonce
