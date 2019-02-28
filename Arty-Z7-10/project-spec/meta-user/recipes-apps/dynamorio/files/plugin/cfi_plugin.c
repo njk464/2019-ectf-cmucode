@@ -32,31 +32,29 @@
  */
 
 #include "dr_api.h"
+#include <signal.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/syscall.h>
 
 /***** DEFINES *****/
 
-//#define DEBUG
-
 #undef report_dynamorio_problem
 #undef report_app_problem
 
-#ifdef DEBUG
-#define DPRINT(format,...)  (dr_fprintf(STDOUT, format, ##__VA_ARGS__))
-#define DERR(format,...)    (dr_fprintf(STDOUT, format, ##__VA_ARGS__))
-#else
-#define DERR(format,...)  
 #define DPRINT(format,...)
-#endif
+#define DUMP_STACK(tls)
 
+#define DERR(format,...)
 
 #define IMP(bb, w, i)       (instrlist_meta_preinsert((bb), (w), (i)))
 #define OCR(r)              (opnd_create_reg((r)))
 #define OUI(i, sz)          (opnd_create_immed_uint((i), (sz)))
 #define OBD(b, i, s, d, sz) (opnd_create_base_disp((b), (i), (s), (d), (sz)))
 
-#define MAX_SHADOW_SIZE 800
+#define MAX_SIGHANDLERS 64
+#define MAX_SHADOW_SIZE 8192
 
 /***** STATIC GLOBALS AND STRUCTS *****/
 
@@ -64,59 +62,22 @@ static bool found_main = false;
 static bool run_main = false;
 static app_pc main_entry = NULL;
 
-struct thread_info
+static bool found_restore_core_regs = false;
+
+static app_pc handlers[MAX_SIGHANDLERS];
+static void *handlers_lock;
+
+struct frame
 {
-    int regset;
-    int shadow_count;
-    app_pc shadow_stack[MAX_SHADOW_SIZE];
+    uint lr;
+    uint sp;
 };
 
-/***** REGSET MANIP *****/
-
-void regset_clear(struct thread_info *tls)
+struct thread_info
 {
-    tls->regset = 1 << dr_get_stolen_reg();
-}
-
-void regset_freeze(struct thread_info *tls, reg_id_t id)
-{
-    tls->regset |= (1 << id);
-}
-
-reg_id_t regset_get(struct thread_info *tls)
-{
-    reg_id_t id;
-
-    for (id = DR_REG_R0; id <= DR_REG_R10; id++)
-    {
-        if (tls->regset & (1 << id)) continue;
-        tls->regset |= (1 << id);
-        return id;
-    }
-
-    DERR("Insufficient registers.\n");
-    dr_abort();
-    return DR_REG_INVALID;
-}
-
-void regset_put(struct thread_info *tls, reg_id_t id)
-{
-    if (id == dr_get_stolen_reg())
-    {
-        DERR("Cannot put stolen reg.\n");
-        dr_abort();
-        return;
-    }
-
-    if (tls->regset & (1 << id))
-    {
-        tls->regset &= ~(1 << id);
-        return;
-    }
-
-    DERR("Register %d already free.\n", id);
-    dr_abort();
-}
+    int shadow_count;
+    struct frame shadow_stack[MAX_SHADOW_SIZE];
+};
 
 /***** SYSCALL FILTER *****/
 
@@ -124,6 +85,7 @@ static bool
 syscall_check(int sysnum)
 {
     return (sysnum == SYS_execve ||
+            sysnum == SYS_execveat ||
             sysnum == SYS_getgroups ||
             sysnum == SYS_setgroups ||
             sysnum == SYS_prctl ||
@@ -177,30 +139,70 @@ syscall_check(int sysnum)
 static bool
 syscall_filter(void *drcontext, int sysnum)
 {
+    sysnum = sysnum % 0x900000;
     return syscall_check(sysnum);
 }
 
 static bool
 event_pre_syscall(void *drcontext, int sysnum)
 {
+    int sig;
+    struct sigaction *act;
+
+    DPRINT("syscall: %d\n", sysnum);
+    sysnum = sysnum % 0x900000;
     if (syscall_check(sysnum))
     {
-        DPRINT("Bad cat!\n");
+        DERR("Bad cat!\n");
         dr_syscall_set_result(drcontext, -1);
         dr_abort();
         return false;
+    }
+
+    if (sysnum == SYS_sigaction || sysnum == SYS_rt_sigaction)
+    {
+        DPRINT("SYS_sigaction/rt_sigaction.\n");
+        sig = dr_syscall_get_param(drcontext, 0);
+        act = (struct sigaction *)dr_syscall_get_param(drcontext, 1);
+        if (!act)
+        {
+            DPRINT("Handler being deregistered.\n");
+            return true;
+        }
+
+        if (sig >= MAX_SIGHANDLERS)
+        {
+            DERR("Invalid signal.\n");
+            dr_abort();
+        }
+
+        if (act->sa_flags & SA_SIGINFO)
+        {
+            DPRINT("SA_SIGACTION: %p\n", act->sa_sigaction);
+            dr_mutex_lock(handlers_lock);
+            handlers[sig] = (app_pc)((uint)act->sa_sigaction & ~1);
+            dr_mutex_unlock(handlers_lock);
+        }
+        else if (act->sa_handler != SIG_DFL || act->sa_handler != SIG_IGN)
+        {
+            DPRINT("SA_HANDLER: %p\n", act->sa_handler);
+            dr_mutex_lock(handlers_lock);
+            handlers[sig] = (app_pc)((uint)act->sa_handler & ~1);
+            dr_mutex_unlock(handlers_lock);
+        }
+
+        /* We don't care about default handlers */
     }
     return true;
 }
 
 /***** OTHER INSTRUMENTATION *****/
 
-#ifdef DEBUG
 static void
-bb_instrument_entry(uint next_l, uint next_h)
+bb_instrument_entry(uint next_l, uint next_h, uint sp)
 {
     int i;
-    app_pc res;
+    uint res;
     void *drcontext;
     struct thread_info *tls;
 
@@ -209,16 +211,8 @@ bb_instrument_entry(uint next_l, uint next_h)
     drcontext = dr_get_current_drcontext();
     tls = (struct thread_info *)dr_get_tls_field(drcontext);
 
-#ifdef DEBUG
     DPRINT("I'm calling!\n");
-
-    DPRINT("STACK: ");
-    for (i = 0; i < tls->shadow_count; i++)
-    {
-        DPRINT("%p ", tls->shadow_stack[i]);
-    }
-    DPRINT("\n");
-#endif
+    DUMP_STACK(tls);
 
     if (tls->shadow_count >= MAX_SHADOW_SIZE)
     {
@@ -226,124 +220,23 @@ bb_instrument_entry(uint next_l, uint next_h)
         dr_abort();
     }
 
-    res = (app_pc)((next_h << 16) + next_l);
-    tls->shadow_stack[tls->shadow_count++] = res;
+    res = (next_h << 16) + next_l;
+    tls->shadow_stack[tls->shadow_count].lr = res;
+    tls->shadow_stack[tls->shadow_count].sp = sp;
+    tls->shadow_count++;
 
-#ifdef DEBUG
-    DPRINT("STACK AFT: ");
-    for (i = 0; i < tls->shadow_count; i++)
-    {
-        DPRINT("%p ", tls->shadow_stack[i]);
-    }
-    DPRINT("\n");
-#endif
+    DUMP_STACK(tls);
 }
-#endif
 
 static void
 insert_entry_instr(void *drcontext, void *tag, instrlist_t *bb,
-                   app_pc next)
+                   uint next)
 {
-    reg_id_t stolen;
-    reg_id_t flags, tls_base, imm, count, next_reg, stack_addr;
-    struct thread_info *tls;
-    instr_t *where;
-    instr_t *l_not_found_main, *l_no_abort;
-
-    where = instrlist_last_app(bb);
-
-    tls = (struct thread_info *)dr_get_tls_field(drcontext);
-    regset_clear(tls);
-
-    stolen = dr_get_stolen_reg();
-
-    flags = regset_get(tls);
-    dr_save_reg(drcontext, bb, where, flags, SPILL_SLOT_1);
-    IMP(bb, where,
-        INSTR_CREATE_mrs(drcontext, OCR(flags), OCR(DR_REG_CPSR)));
-
-    imm = regset_get(tls);
-    dr_save_reg(drcontext, bb, where, imm, SPILL_SLOT_2);
-    instrlist_insert_mov_immed_ptrsz(drcontext, (uint)&found_main,
-                                     OCR(imm), bb, where, NULL, NULL);
-    IMP(bb, where,
-        INSTR_CREATE_ldrb(drcontext, OCR(imm),
-                          OBD(imm, DR_REG_NULL, 0, 0, OPSZ_1)));
-
-    l_not_found_main = INSTR_CREATE_label(drcontext);
-    IMP(bb, where,
-        INSTR_CREATE_cmp(drcontext, OCR(imm), OUI(0, OPSZ_4)));
-    IMP(bb, where,
-        INSTR_PRED(INSTR_CREATE_b(drcontext, opnd_create_instr(l_not_found_main)),
-                   DR_PRED_EQ));
-
-    tls_base = regset_get(tls);
-    dr_save_reg(drcontext, bb, where, tls_base, SPILL_SLOT_3);
-    dr_insert_read_tls_field(drcontext, bb, where, tls_base);
-
-    count = regset_get(tls);
-    dr_save_reg(drcontext, bb, where, count, SPILL_SLOT_4);
-    IMP(bb, where,
-        INSTR_CREATE_ldr(drcontext, OCR(count),
-                         OBD(tls_base, DR_REG_NULL, 0,
-                             (uint)offsetof(struct thread_info, shadow_count),
-                             OPSZ_4)));
-
-    l_no_abort = INSTR_CREATE_label(drcontext);
-    instrlist_insert_mov_immed_ptrsz(drcontext, MAX_SHADOW_SIZE - 1, OCR(imm),
-                                     bb, where, NULL, NULL);
-    IMP(bb, where,
-        INSTR_CREATE_cmp(drcontext, OCR(count), OCR(imm)));
-    IMP(bb, where,
-        INSTR_PRED(INSTR_CREATE_b(drcontext, opnd_create_instr(l_no_abort)),
-                   DR_PRED_LS));
-
-    dr_insert_call(drcontext, bb, where, dr_abort, 0);
-
-    IMP(bb, where, l_no_abort);
-    instrlist_insert_mov_immed_ptrsz(drcontext, (uint)next, OCR(imm),
-                                     bb, where, NULL, NULL);
-
-    stack_addr = regset_get(tls);
-    dr_save_reg(drcontext, bb, where, stack_addr, SPILL_SLOT_5);
-    IMP(bb, where,
-        INSTR_CREATE_add(drcontext, OCR(stack_addr), OCR(tls_base),
-                         OUI((uint)offsetof(struct thread_info, shadow_stack), OPSZ_4)));
-
-    IMP(bb, where,
-        INSTR_CREATE_str(drcontext,
-                         OBD(stack_addr, count, 4, 0, OPSZ_4),
-                         OCR(imm)));
-    IMP(bb, where,
-        INSTR_CREATE_add(drcontext, OCR(count), OCR(count), OUI(1, OPSZ_4)));
-    IMP(bb, where,
-        INSTR_CREATE_str(drcontext,
-                         OBD(tls_base, DR_REG_NULL, 0,
-                             (uint)offsetof(struct thread_info, shadow_count),
-                             OPSZ_4),
-                         OCR(count)));
-
-    dr_restore_reg(drcontext, bb, where, stack_addr, SPILL_SLOT_5);
-    
-    dr_restore_reg(drcontext, bb, where, count, SPILL_SLOT_4);
-
-    dr_restore_reg(drcontext, bb, where, tls_base, SPILL_SLOT_3);
-
-    IMP(bb, where, l_not_found_main);
-    dr_restore_reg(drcontext, bb, where, imm, SPILL_SLOT_2);
-
-    IMP(bb, where,
-        INSTR_CREATE_msr(drcontext, OCR(DR_REG_CPSR),
-                         OPND_CREATE_INT_MSR_NZCVQG(),
-                         OCR(flags)));
-    dr_restore_reg(drcontext, bb, where, flags, SPILL_SLOT_1);
-
-    /*
     dr_insert_clean_call(drcontext, bb, instrlist_last(bb),
-                         bb_instrument_entry, false, 2,
+                         bb_instrument_entry, false, 3,
                          opnd_create_immed_uint((uint)next & 0xffff, OPSZ_2),
-                         opnd_create_immed_uint((uint)next >> 16, OPSZ_2));
-    */
+                         opnd_create_immed_uint((uint)next >> 16, OPSZ_2),
+                         opnd_create_reg(DR_REG_SP));
 }
 
 static instr_t *
@@ -364,11 +257,12 @@ get_it_instr(instr_t *target)
 }
 
 static void
-bb_instrument_exit(bool is_stack, app_pc addr, int offset,
+bb_instrument_exit(bool is_stack, uint sp, uint lr, int offset,
                    dr_pred_type_t exit_pred)
 {
     int i;
-    app_pc ret_addr;
+    uint ret_addr;
+    uint stack_addr;
     void *drcontext;
     dr_mcontext_t mc = { sizeof(mc), DR_MC_CONTROL };
     uint cpsr;
@@ -448,32 +342,23 @@ bb_instrument_exit(bool is_stack, app_pc addr, int offset,
         }
     }
 
-    ret_addr = is_stack ? *(app_pc *)(addr + offset) : addr;
-    ret_addr = (app_pc)((uint)ret_addr & ~1);
+    ret_addr = is_stack ? *(uint *)(sp + offset) : lr;
+    ret_addr = ret_addr & ~1;
 
-#ifdef DEBUG
-    DPRINT("STACK: ");
-    for (i = 0; i < tls->shadow_count; i++)
-    {
-        DPRINT("%p ", tls->shadow_stack[i]);
-    }
-    DPRINT("\n");
+    stack_addr = is_stack ? sp + offset + 4 : sp;
 
-    DPRINT("RET: %p\n", ret_addr);
-#endif
+    DUMP_STACK(tls);
+    DPRINT("RET: 0x%x\n", ret_addr);
+    DPRINT("STACK: 0x%x\n", stack_addr);
 
     while (tls->shadow_count)
     {
-        if (tls->shadow_stack[--tls->shadow_count] == ret_addr)
+        tls->shadow_count--;
+        if (tls->shadow_stack[tls->shadow_count].lr == ret_addr &&
+            tls->shadow_stack[tls->shadow_count].sp == stack_addr)
         {
-#ifdef DEBUG
-            DPRINT("STACK AFT: ");
-            for (i = 0; i < tls->shadow_count; i++)
-            {
-                DPRINT("%p ", tls->shadow_stack[i]);
-            }
-            DPRINT("\n");
-#endif
+            tls->shadow_count++;
+            DUMP_STACK(tls);
             return;
         }
         DPRINT("Mismatch!\n");
@@ -489,6 +374,7 @@ insert_exit_instr(void *drcontext, void *tag, instrlist_t *bb)
     /* Assume normal stack functionality */
     instr_t *instrp, *exit;
     opnd_t exit_opnd;
+    reg_id_t ret_src;
     dr_pred_type_t exit_pred;
 
     exit = instrlist_last_app(bb);
@@ -499,36 +385,92 @@ insert_exit_instr(void *drcontext, void *tag, instrlist_t *bb)
 
     /* Extract operand, LR/SP */
     exit_opnd = instr_get_src(exit, instr_num_srcs(exit) - 1);
+    
+    /* should be LR/SP */
+    if (!opnd_is_reg(exit_opnd))
+    {
+        DERR("Unknown exit operand\n");
+        dr_abort();
+    }
+
+    ret_src = opnd_get_reg(exit_opnd);
+    if (ret_src != DR_REG_LR && ret_src != DR_REG_SP)
+    {
+        DERR("Unknown exit reg\n");
+        dr_abort();
+    }
 
     /* Extract predicate */
     exit_pred = instr_get_predicate(exit);
 
     DPRINT("FOUND PRED: %d\n", exit_pred);
 
-    /* FIXME: Check for stack cleanup in IT block */
-    if (opnd_get_reg(exit_opnd) == DR_REG_LR)
+    if (ret_src == DR_REG_LR)
     {
         dr_insert_clean_call(drcontext, bb, instrp,
-                             bb_instrument_exit, false, 4,
+                             bb_instrument_exit, false, 6,
                              opnd_create_immed_uint(0, OPSZ_1),
-                             exit_opnd,
+                             opnd_create_reg(DR_REG_SP),
+                             opnd_create_reg(DR_REG_LR),
                              opnd_create_immed_int(0, OPSZ_1),
                              opnd_create_immed_int(exit_pred, OPSZ_1));
     }
     else
     {
         /*
-         * -1 for SP, -1 for 0-indexing
-         * Always fits in 1 byte
+         * -1 for SP, -1 for 0-indexing for -2 total.
+         * Displacement always fits in 1 byte.
          */
         dr_insert_clean_call(drcontext, bb, instrp,
-                             bb_instrument_exit, false, 4,
+                             bb_instrument_exit, false, 6,
                              opnd_create_immed_uint(1, OPSZ_1),
-                             exit_opnd,
+                             opnd_create_reg(DR_REG_SP),
+                             opnd_create_reg(DR_REG_LR),
                              opnd_create_immed_int((instr_num_dsts(exit) - 2) * 4,
                                                    OPSZ_1),
                              opnd_create_immed_int(exit_pred, OPSZ_1));
     }
+}
+
+static void
+core_regs_weak_return(uint sp, uint lr)
+{
+    void *drcontext;
+    struct thread_info *tls;
+
+    drcontext = dr_get_current_drcontext();
+    tls = (struct thread_info *)dr_get_tls_field(drcontext);
+
+    /* Offset from pop pc */
+    sp = sp + 4;
+
+    DUMP_STACK(tls);
+    DPRINT("CORE_REGS LR: 0x%x\n", lr & ~1);
+    DPRINT("CORE_REGS STACK: 0x%x\n", sp);
+
+    while (tls->shadow_count)
+    {
+        tls->shadow_count --;
+        if (tls->shadow_stack[tls->shadow_count].sp == sp)
+        {
+            tls->shadow_count++;
+            DUMP_STACK(tls);
+            return;
+        }
+        DPRINT("Mismatch!\n");
+    }
+
+    DERR("No more food...\n");
+    dr_abort();
+}
+
+static void
+insert_core_regs_instr(void *drcontext, void *tag, instrlist_t *bb)
+{
+    dr_insert_clean_call(drcontext, bb, instrlist_last_app(bb),
+                         core_regs_weak_return, false, 2,
+                         opnd_create_reg(DR_REG_SP),
+                         opnd_create_reg(DR_REG_LR));
 }
 
 static bool
@@ -560,10 +502,10 @@ match_crt_signature(instrlist_t *bb)
 }
 
 static void
-crt_grab_main(app_pc app_main)
+crt_grab_main(uint app_main)
 {
-    DPRINT("Found main at %p.\n", (app_pc)((uint)app_main & ~1));
-    main_entry = (app_pc)((uint)app_main & ~1);
+    DPRINT("Found main at %x.\n", (app_pc)(app_main & ~1));
+    main_entry = (app_pc)(app_main & ~1);
 }
 
 static void
@@ -575,7 +517,7 @@ insert_crt_instr(void *drcontext, void *tag, instrlist_t *bb)
 }
 
 static void
-shadow_main_lr(app_pc app_main_lr)
+shadow_main_sp_lr(uint sp, uint app_main_lr)
 {
     void *drcontext;
     struct thread_info *tls;
@@ -583,7 +525,9 @@ shadow_main_lr(app_pc app_main_lr)
     if (run_main) return;
     drcontext = dr_get_current_drcontext();
     tls = (struct thread_info *)dr_get_tls_field(drcontext);
-    tls->shadow_stack[tls->shadow_count++] = (app_pc)((uint)app_main_lr & ~1);
+    tls->shadow_stack[tls->shadow_count].lr = app_main_lr & ~1;
+    tls->shadow_stack[tls->shadow_count].sp = sp;
+    tls->shadow_count++;
     run_main = true;
 }
 
@@ -591,7 +535,42 @@ static void
 insert_main_instr(void *drcontext, void *tag, instrlist_t *bb)
 {
     dr_insert_clean_call(drcontext, bb, instrlist_first_app(bb),
-                         shadow_main_lr, false, 1,
+                         shadow_main_sp_lr, false, 2,
+                         opnd_create_reg(DR_REG_SP),
+                         opnd_create_reg(DR_REG_LR));
+}
+
+static void
+shadow_sighandler_sp_lr(uint sp, uint lr)
+{
+    void *drcontext;
+    struct thread_info *tls;
+    uint count;
+    struct frame *stack;
+
+    if (!found_main) return;
+    drcontext = dr_get_current_drcontext();
+    tls = (struct thread_info *)dr_get_tls_field(drcontext);
+    count = tls->shadow_count;
+    stack = tls->shadow_stack;
+
+    /* Small optim */
+    if (!count ||
+        stack[count - 1].lr != lr & ~1 ||
+        stack[count - 1].sp != sp)
+    {
+        stack[count].lr = lr & ~1;
+        stack[count].sp = sp;
+        tls->shadow_count++;
+    }
+}
+
+static void
+insert_entry_sighandler_instr(void *drcontext, void *tag, instrlist_t *bb)
+{
+    dr_insert_clean_call(drcontext, bb, instrlist_first_app(bb),
+                         shadow_sighandler_sp_lr, false, 2,
+                         opnd_create_reg(DR_REG_SP),
                          opnd_create_reg(DR_REG_LR));
 }
 
@@ -599,9 +578,11 @@ static dr_emit_flags_t
 event_bb(void *drcontext, void *tag, instrlist_t *bb,
          bool for_trace, bool translating)
 {
+    int opcode;
     instr_t *instrp = NULL;
     opnd_t opnd, opnd1, opnd2;
-    app_pc pc;
+    app_pc bb_start;
+    uint pc, i, n;
 
     DPRINT("=========================\n");
 
@@ -611,12 +592,40 @@ event_bb(void *drcontext, void *tag, instrlist_t *bb,
         return DR_EMIT_DEFAULT;
     }
 
+    if (!found_restore_core_regs)
+    {
+        for (instrp = instrlist_first_app(bb); instrp;
+             instrp = instr_get_next_app(instrp))
+        {
+            /* Find restore_core_regs (C++) */
+            if (instr_get_opcode(instrp) == OP_ldm &&
+                instr_num_dsts(instrp) == 12 &&
+                opnd_get_reg(instr_get_dst(instrp, 11)) == DR_REG_R11 &&
+                opnd_get_base(instr_get_src(instrp, 0)) == DR_REG_R0)
+            {
+                DPRINT("Found restore_core_regs candidate.\n");
+
+                instrp = instrlist_last_app(bb);
+                if (instr_is_return(instrp) &&
+                    !instr_get_predicate(instrp) &&
+                    instr_get_opcode(instrp) == OP_ldm &&
+                    instr_num_dsts(instrp) == 2 &&
+                    opnd_get_base(instr_get_src(instrp, 0)) == DR_REG_SP)
+                {
+                    DPRINT("Found restore_core_regs.\n");
+                    found_restore_core_regs = true;
+                    insert_core_regs_instr(drcontext, tag, bb);
+                    goto END;
+                }
+            }
+        }
+    }
+
     instrp = instrlist_last_app(bb);
-    pc = instr_get_app_pc(instrp);
+    pc = (uint)instr_get_app_pc(instrp);
 
     if (instr_is_call(instrp))
     {
-        /* FIXME: Not handling predicated */
         insert_entry_instr(drcontext, tag, bb, pc + instr_length(drcontext, instrp));
     }
     else if (instr_is_return(instrp))
@@ -626,19 +635,23 @@ event_bb(void *drcontext, void *tag, instrlist_t *bb,
          * but passes instr_is_return.
          * However, ldr pc, [sp], #4 is a common return when only LR is pushed.
          */
-        if (instr_get_opcode(instrp) != OP_ldr)
+        opcode = instr_get_opcode(instrp);
+        if (opcode != OP_ldr)
         {
             insert_exit_instr(drcontext, tag, bb);
         }
-        else if (instr_num_srcs(instrp) == 3)
+        else if (opcode == OP_ldr)
         {
-            opnd = instr_get_src(instrp, 0);
-            opnd2 = instr_get_src(instrp, 2);
-            if (opnd_is_base_disp(opnd) &&
-                opnd_is_reg(opnd2) &&
-                opnd_get_reg(opnd2) == DR_REG_SP)
+            if (instr_num_srcs(instrp) == 3)
             {
-                insert_exit_instr(drcontext, tag, bb);
+                opnd = instr_get_src(instrp, 0);
+                opnd2 = instr_get_src(instrp, 2);
+                if (opnd_is_base_disp(opnd) &&
+                    opnd_is_reg(opnd2) &&
+                    opnd_get_reg(opnd2) == DR_REG_SP)
+                {
+                    insert_exit_instr(drcontext, tag, bb);
+                }
             }
         }
     }
@@ -647,6 +660,7 @@ event_bb(void *drcontext, void *tag, instrlist_t *bb,
     if (!main_entry)
     {
         /* Attempt instrumentation */
+        instrp = instrlist_last_app(bb);
         if (match_crt_signature(bb) && instr_is_call(instrp))
         {
             DPRINT("Found CRT.\n");
@@ -664,10 +678,18 @@ event_bb(void *drcontext, void *tag, instrlist_t *bb,
         }
     }
 
-#ifdef DEBUG
-    instrlist_disassemble(drcontext, tag, bb, STDOUT);
-#endif
+    /* Instrument signal handlers */
+    bb_start = instr_get_app_pc(instrlist_first_app(bb));
+    for (i = 0; i < MAX_SIGHANDLERS; i++)
+    {
+        if (bb_start == handlers[i])
+        {
+            insert_entry_sighandler_instr(drcontext, tag, bb);
+            break;
+        }
+    }
 
+END:
     return DR_EMIT_DEFAULT;
 }
 
@@ -703,11 +725,12 @@ event_exit(void)
 DR_EXPORT void
 dr_client_main(client_id_t id, int argc, const char *argv[])
 {
-    disassemble_set_syntax(DR_DISASM_ARM);
     dr_register_filter_syscall_event(syscall_filter);
     dr_register_pre_syscall_event(event_pre_syscall);
     dr_register_bb_event(event_bb);
     dr_register_thread_init_event(event_thread_init);
     dr_register_thread_exit_event(event_thread_exit);
     dr_register_exit_event(event_exit);
+
+    handlers_lock = dr_mutex_create();
 }
