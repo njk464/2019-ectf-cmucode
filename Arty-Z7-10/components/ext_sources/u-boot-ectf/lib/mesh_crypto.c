@@ -64,12 +64,12 @@ char *get_salt(char *username){
  * @params version The version number of the game
  * @return void 
  */
-void gen_userkey(char *key, char* name, char* pin, char* game_name, int major_version, int minor_version){
-    int MAX_PASSWORD_SIZE = strlen(name) + strlen(pin) + strlen(game_name) + strlen(version) + crypto_pwhash_SALTBYTES ; 
+void gen_userkey(char *key, char* name, char* pin, char* game_name, char* major_version, char* minor_version){
+    int MAX_PASSWORD_SIZE = strlen(name) + strlen(pin) + strlen(game_name) + strlen(major_version) + strlen(minor_version) + crypto_pwhash_SALTBYTES ; 
     char password[MAX_PASSWORD_SIZE];
     memset(key, 0, crypto_hash_sha256_BYTES);
     // combine strings then memcpy non-standard characters from the salt
-    sprintf(password, "%s%s%s%d.%d", name, pin, game_name, major_version, minor_version);
+    sprintf(password, "%s%s%s%s.%s", name, pin, game_name, major_version, minor_version);
     printf("Password: |%s|\n", password);
     memcpy(password + MAX_PASSWORD_SIZE - crypto_pwhash_SALTBYTES, get_salt(name), crypto_pwhash_SALTBYTES);
     crypto_hash_sha256((unsigned char*) key, 
@@ -383,7 +383,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
 
         // compare the header to provided name
         char* full_name = (char*) safe_malloc(game_name_len);
-        if(sprintf(full_name, "%s-v%d.%d", name, major_version, minor_version) <=0){
+        if(sprintf(full_name, "%s-v%d.%d", name, major_version_str, minor_version_str) <=0){
             printf("Game header data corrupted.");
             return -1;
         } 
