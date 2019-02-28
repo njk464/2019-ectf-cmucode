@@ -323,14 +323,17 @@ int mesh_help(char **args)
  *        This implements the shutdown function in the mesh shell.
  * 
  * @param args arguments passed to the shutdown command. They are ignored
- * @return MESH_SHUTDOWN so that the mesh_loop knows to shutdown
+ * @return never gets here
  */
 int mesh_shutdown(char **args)
 {
     /* Exit the shell completely */
     memset(user.name, 0, MAX_USERNAME_LENGTH + 1);
     memset(user.pin, 0, MAX_PIN_LENGTH + 1);
-    return 0;
+    char * const reset_argv[3] = {"reset"}; 
+    cmd_tbl_t* reset_tp = find_cmd("reset");
+    reset_tp->cmd(reset_tp, 1, 0, reset_argv);
+    return MESH_SHUTDOWN;
 }
 
 
@@ -343,7 +346,7 @@ int mesh_shutdown(char **args)
  * @return 0 on success
  */
 int mesh_logout(char **args)
-{
+{   
     /* Exit the shell, allow other user to login */
     memset(user.name, 0, MAX_USERNAME_LENGTH + 1);
     memset(user.pin, 0, MAX_PIN_LENGTH + 1);
