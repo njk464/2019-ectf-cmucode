@@ -6,7 +6,7 @@ C_FLAGS =   -fPIC    -DARM_32 -DLINUX
 
 C_DEFINES = -Dcfiplugin_EXPORTS
 
-C_INCLUDES = -I/home/ubuntu/dynamorio_bin/DynamoRIO-ARM-Linux-EABIHF-7.1.0-1/cmake/../include 
+C_INCLUDES = -I/home/ubuntu/dynamorio_bin/HOTPATCH/build_arm/cmake/../include -I/home/ubuntu/dynamorio_bin/HOTPATCH/build_arm/cmake/../ext/include 
 
 # Custom flags: CMakeFiles/cfiplugin.dir/cfi_plugin.c.o_FLAGS = -O3 -fno-stack-protector
 

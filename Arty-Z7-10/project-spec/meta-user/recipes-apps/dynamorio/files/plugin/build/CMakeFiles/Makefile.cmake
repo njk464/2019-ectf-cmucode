@@ -7,11 +7,10 @@ set(CMAKE_DEPENDS_GENERATOR "Unix Makefiles")
 # The top level Makefile was generated from the following files:
 set(CMAKE_MAKEFILE_DEPENDS
   "CMakeCache.txt"
-  "/home/ubuntu/dynamorio_bin/DynamoRIO-ARM-Linux-EABIHF-7.1.0-1/cmake/DynamoRIOConfig.cmake"
-  "/home/ubuntu/dynamorio_bin/DynamoRIO-ARM-Linux-EABIHF-7.1.0-1/cmake/DynamoRIOConfigVersion.cmake"
-  "/home/ubuntu/dynamorio_bin/DynamoRIO-ARM-Linux-EABIHF-7.1.0-1/cmake/DynamoRIOTarget32-debug.cmake"
-  "/home/ubuntu/dynamorio_bin/DynamoRIO-ARM-Linux-EABIHF-7.1.0-1/cmake/DynamoRIOTarget32-relwithdebinfo.cmake"
-  "/home/ubuntu/dynamorio_bin/DynamoRIO-ARM-Linux-EABIHF-7.1.0-1/cmake/DynamoRIOTarget32.cmake"
+  "/home/ubuntu/dynamorio_bin/HOTPATCH/build_arm/cmake/DynamoRIOConfig.cmake"
+  "/home/ubuntu/dynamorio_bin/HOTPATCH/build_arm/cmake/DynamoRIOConfigVersion.cmake"
+  "/home/ubuntu/dynamorio_bin/HOTPATCH/build_arm/cmake/DynamoRIOMap32.cmake"
+  "/home/ubuntu/dynamorio_bin/HOTPATCH/build_arm/cmake/DynamoRIOTarget32.cmake"
   "../CMakeLists.txt"
   "CMakeFiles/3.10.2/CMakeCCompiler.cmake"
   "CMakeFiles/3.10.2/CMakeCXXCompiler.cmake"

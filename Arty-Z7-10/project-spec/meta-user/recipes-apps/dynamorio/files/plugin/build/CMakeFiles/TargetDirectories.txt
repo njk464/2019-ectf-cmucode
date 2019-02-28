@@ -1,3 +1,3 @@
-/home/ubuntu/dynamorio_bin/plugin/build/CMakeFiles/rebuild_cache.dir
-/home/ubuntu/dynamorio_bin/plugin/build/CMakeFiles/cfiplugin.dir
-/home/ubuntu/dynamorio_bin/plugin/build/CMakeFiles/edit_cache.dir
+/home/ubuntu/dynamorio_bin/plugin_ship/build/CMakeFiles/rebuild_cache.dir
+/home/ubuntu/dynamorio_bin/plugin_ship/build/CMakeFiles/cfiplugin.dir
+/home/ubuntu/dynamorio_bin/plugin_ship/build/CMakeFiles/edit_cache.dir
