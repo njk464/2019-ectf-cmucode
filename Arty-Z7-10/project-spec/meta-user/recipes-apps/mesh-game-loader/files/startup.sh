@@ -1,4 +1,4 @@
-#!/bin/sh
+
 start ()
 {
     echo -e '\033[9;0]' > /dev/tty1
@@ -15,8 +15,9 @@ start ()
     touch /usr/bin/startup.sh
 
     echo "#!/bin/sh" >> /usr/bin/startup.sh
+    echo "stty -F /dev/ttyPS0 speed 115200" >> /usr/bin/startup.sh
     echo "/usr/share/dynamorio/bin32/drrun -c /usr/share/dynamorio/plugin/libcfiplugin.so -- $TMP_FILE" >> /usr/bin/startup.sh
-
+    
     # create user and set permissions
     adduser ectf --shell /usr/bin/startup.sh --disabled-password --gecos ""
 
@@ -30,6 +31,8 @@ start ()
         mv /dev/$a /dev/mesh_drm
     fi
 
+    chmod 666 /dev/ttyPS0
+
     # set tty device with correct baud
     stty -F /dev/ttyPS0 speed 115200
 
@@ -42,7 +45,7 @@ start ()
    
     # login ectf and launch the game
     /bin/login -f ectf
-
+    
     # reboot
     sleep 5
     shutdown -r now
