@@ -64,12 +64,12 @@ char *get_salt(char *username){
  * @params version The version number of the game
  * @return void 
  */
-void gen_userkey(char *key, char* name, char* pin, char* game_name, char* version){
+void gen_userkey(char *key, char* name, char* pin, char* game_name, int major_version, int minor_version){
     int MAX_PASSWORD_SIZE = strlen(name) + strlen(pin) + strlen(game_name) + strlen(version) + crypto_pwhash_SALTBYTES ; 
     char password[MAX_PASSWORD_SIZE];
     memset(key, 0, crypto_hash_sha256_BYTES);
     // combine strings then memcpy non-standard characters from the salt
-    sprintf(password, "%s%s%s%s", name, pin, game_name, version);
+    sprintf(password, "%s%s%s%d.%d", name, pin, game_name, major_version, minor_version);
     printf("Password: |%s|\n", password);
     memcpy(password + MAX_PASSWORD_SIZE - crypto_pwhash_SALTBYTES, get_salt(name), crypto_pwhash_SALTBYTES);
     crypto_hash_sha256((unsigned char*) key, 
@@ -366,7 +366,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         game_version = strsep(&decrypted_header,"\n");
         strsep(&decrypted_header,":");
         parsed_game_name = strsep(&decrypted_header,"\n");
-        end_game_name = decrypted_header - 1; // this is -2 because I don't want to include the newline
+        end_game_name = decrypted_header - 1; 
 
         // get everything up to the first '.'. That's the major version
         char *temp_pointer = game_version;
@@ -423,7 +423,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         if(flag == 1){
             // get the user key
             printf("Parsed Game Name: |%s|\n", parsed_game_name);
-            gen_userkey(user_key, user->name, user->pin, parsed_game_name, game_version);
+            gen_userkey(user_key, user->name, user->pin, parsed_game_name, major_version, minor_version);
 
              // decrypt the gamekeynonce
             if(decrypt(user_key, user_nonce, encrypted_gamekeynonce, encrypted_gamekeynonce_len, gamekey_nonce) == -1){
