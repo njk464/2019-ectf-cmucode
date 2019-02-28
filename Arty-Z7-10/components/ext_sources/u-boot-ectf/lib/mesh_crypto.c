@@ -65,7 +65,7 @@ char *get_salt(char *username){
  * @return void 
  */
 void gen_userkey(char *key, char* name, char* pin, char* game_name, char* major_version, char* minor_version){
-    int MAX_PASSWORD_SIZE = strlen(name) + strlen(pin) + strlen(game_name) + strlen(major_version) + strlen(minor_version) + crypto_pwhash_SALTBYTES ; 
+    int MAX_PASSWORD_SIZE = strlen(name) + strlen(pin) + strlen(game_name) + strlen(major_version) + strlen(minor_version) + crypto_pwhash_SALTBYTES + 1; 
     char password[MAX_PASSWORD_SIZE];
     memset(key, 0, crypto_hash_sha256_BYTES);
     // combine strings then memcpy non-standard characters from the salt
