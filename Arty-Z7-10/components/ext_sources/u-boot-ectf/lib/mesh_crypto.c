@@ -383,7 +383,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
 
         // compare the header to provided name
         char* full_name = (char*) safe_malloc(game_name_len);
-        if(sprintf(full_name, "%s-v%d.%d", name, major_version_str, minor_version_str) <=0){
+        if(sprintf(full_name, "%s-v%s.%s", name, major_version_str, minor_version_str) <=0){
             printf("Game header data corrupted.");
             return -1;
         } 
