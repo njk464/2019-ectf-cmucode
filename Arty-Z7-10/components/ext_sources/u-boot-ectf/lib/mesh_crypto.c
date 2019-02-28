@@ -17,27 +17,6 @@ void safe_free(void* ptr, size_t size){
 }
 
 /*
- * @brief TODO: This is a debug function
- *              It prints out memory in hex for easy debugging
- * @params ptr A pointer to the data
- * @params len The len of the data
- * @return void
- */
-void print_hex(unsigned char *ptr, unsigned int len) {
-    int i;
-    int first = 1;
-    for (i = 0; i <= len; i++) {
-        if(first) {
-            printf("0x%02x", ptr[i]);
-            first = 0; 
-        } else {
-            printf(",0x%02x", ptr[i]);
-        }
-    }
-    printf("\n");
-}
-
-/*
  * @brief Given a username, read the salt from secret.h
  *
  * @params username The name of a user who salt is being returned
@@ -109,7 +88,12 @@ int decrypt(char* key, char* nonce, char* message, unsigned int len, char* ret){
         }
     }
     // decrypt the provided ciphertext
-    if (crypto_secretbox_open(padded_plaintext, padded_ciphertext, padded_len, nonce, key) == -1){
+    if (crypto_secretbox_open( padded_plaintext,
+                               padded_ciphertext, 
+                               padded_len, 
+                               (const unsigned char*) nonce, 
+                               (const unsigned char*) key) == -1)
+    {
         printf("Decrypt Fail\n");
         safe_free(padded_plaintext, padded_len);
         safe_free(padded_ciphertext, padded_len);
@@ -192,7 +176,11 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
     signed_ciphertext = (char*) safe_malloc(unverified_len); //TODO: Check length (+1)
     mesh_read_ext4(game_name, signed_ciphertext, unverified_len);
 
-    if(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0){
+    if(verify_signed((unsigned char*) signed_ciphertext, 
+                     (unsigned char*) verified_ciphertext,
+                     unverified_len,
+                     (unsigned char*) sign_public_key) == 0)
+    {
         // read in the size of the encrypted header. 
         memcpy(&encrypted_header_len, verified_ciphertext, sizeof(unsigned long long int));
         decrypted_header_len = encrypted_header_len - crypto_secretbox_MACBYTES;
@@ -333,7 +321,11 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
     signed_ciphertext = (char*) safe_malloc(unverified_len); //TODO: Check length (+1)
     mesh_read_ext4(game_name, signed_ciphertext, unverified_len);
 
-    if(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0){
+    if(verify_signed((unsigned char*) signed_ciphertext, 
+                     (unsigned char*) verified_ciphertext,
+                      unverified_len,
+                     (unsigned char*) sign_public_key) == 0)
+    {
         // Read in the size of the encrypted header. 
         memcpy(&encrypted_header_len, verified_ciphertext, sizeof(unsigned long long int));
         decrypted_header_len = encrypted_header_len - crypto_secretbox_MACBYTES;
