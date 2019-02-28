@@ -233,7 +233,7 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
             printf("Game header data corrupted.");
             return -1;
         } 
-
+        printf("FULL: |%s|\nGAME: |%s|\n", full_name, game_name);
         if (strncmp(full_name, game_name, game_name_len) != 0){
             printf("Header data and file name do not match.");
             return -1;
@@ -386,7 +386,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
             printf("Game header data corrupted.");
             return -1;
         } 
-
+        printf("FULL: |%s|\nGAME: |%s|\n", full_name, game_name);
         if (strncmp(full_name, game_name, game_name_len) != 0){
             printf("Header data and file name do not match.");
             return -1;
