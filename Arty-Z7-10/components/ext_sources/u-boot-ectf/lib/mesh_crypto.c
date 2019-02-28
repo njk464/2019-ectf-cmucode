@@ -70,6 +70,7 @@ void gen_userkey(char *key, char* name, char* pin, char* game_name, char* versio
     memset(key, 0, crypto_hash_sha256_BYTES);
     // combine strings then memcpy non-standard characters from the salt
     sprintf(password, "%s%s%s%s", name, pin, game_name, version);
+    printf("Password: |%s|\n", password);
     memcpy(password + MAX_PASSWORD_SIZE - crypto_pwhash_SALTBYTES, get_salt(name), crypto_pwhash_SALTBYTES);
     crypto_hash_sha256((unsigned char*) key, 
                                  (const unsigned char *) password, 
