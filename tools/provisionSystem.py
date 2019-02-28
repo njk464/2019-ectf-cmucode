@@ -345,9 +345,12 @@ def main():
     # Read in all of the user information into a list and strip newlines
     lines = [line.rstrip('\n') for line in f_mesh_users_in]
 
-    users = validate_users(lines)
-
-    secret_users = factory_secrets_users(lines)
+    try:
+        secret_users = factory_secrets_users(lines)
+    except Exception as e:
+            print("Users text file is misformated.")
+            exit(2)
+            
     # parse user strings
     try:
         users = validate_users(lines)
