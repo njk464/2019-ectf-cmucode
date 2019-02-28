@@ -70,7 +70,6 @@ void gen_userkey(char *key, char* name, char* pin, char* game_name, char* major_
     memset(key, 0, crypto_hash_sha256_BYTES);
     // combine strings then memcpy non-standard characters from the salt
     sprintf(password, "%s%s%s%s.%s", name, pin, game_name, major_version, minor_version);
-    printf("Password: |%s|\n", password);
     memcpy(password + MAX_PASSWORD_SIZE - crypto_pwhash_SALTBYTES, get_salt(name), crypto_pwhash_SALTBYTES);
     crypto_hash_sha256((unsigned char*) key, 
                                  (const unsigned char *) password, 
@@ -234,7 +233,6 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
             printf("Game header data corrupted.");
             return -1;
         } 
-        printf("FULL: |%s|\nGAME: |%s|\n", full_name, game_name);
         if (strncmp(full_name, game_name, game_name_len) != 0){
             printf("Header data and file name do not match.");
             return -1;
@@ -387,7 +385,6 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
             printf("Game header data corrupted.");
             return -1;
         } 
-        printf("FULL: |%s|\nGAME: |%s|\n", full_name, game_name);
         if (strncmp(full_name, game_name, game_name_len) != 0){
             printf("Header data and file name do not match.");
             return -1;
@@ -422,7 +419,6 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         // check for found user
         if(flag == 1){
             // get the user key
-            printf("Parsed Game Name: |%s|\n", parsed_game_name);
             gen_userkey(user_key, user->name, user->pin, parsed_game_name, major_version_str, minor_version_str);
 
              // decrypt the gamekeynonce
