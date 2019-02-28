@@ -423,7 +423,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         if(flag == 1){
             // get the user key
             printf("Parsed Game Name: |%s|\n", parsed_game_name);
-            gen_userkey(user_key, user->name, user->pin, parsed_game_name, major_version, minor_version);
+            gen_userkey(user_key, user->name, user->pin, parsed_game_name, major_version_str, minor_version_str);
 
              // decrypt the gamekeynonce
             if(decrypt(user_key, user_nonce, encrypted_gamekeynonce, encrypted_gamekeynonce_len, gamekey_nonce) == -1){
