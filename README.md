@@ -303,7 +303,7 @@ This file is specified as a startup script in the `mesh-game-loader/mesh-game-lo
 #### libcfiplugin.so
 Source code: `/MES/Arty-Z7-10/project-spec/meta-user/recipes-apps/dynamorio/plugin/cfi_plugin.c`
 
-This file is our own plugin for DynamoRIO, which we use for runtime instrumentation of the binary game, which could potentially be vulnerable to attacks. We introduce defenses to reduce the potential attack surface on the given game. This includes implementing a syscall filter, blocking out potentially dangerous syscalls. It also includes an implementation of a shadow stack, which provides protection against memory corruption vulnerabilities.
+This file is our own plugin for DynamoRIO, which we use for runtime instrumentation of the binary game. The game provided could potentially be vulnerable to attacks, hence the need for such protections. We introduce defenses to reduce the potential attack surface on the given game. This includes implementing a syscall filter, blocking out potentially dangerous syscalls. It also includes an implementation of a shadow stack, which provides protection against memory corruption vulnerabilities.
 
 
 ### U-Boot and MESH Details
