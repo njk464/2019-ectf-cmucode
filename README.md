@@ -100,7 +100,13 @@ For example, the reference implementation generates the following files
 
 `FactorySecrets.txt`:
 
-	Empty for reference design, but can contain information in a student defined format.
+	<user[0]> <user[0]_pin> <user[0]_salt>
+	...	   ...	        ...
+	<user[n]> <user[n]_pin> <user[n]_salt>
+	<header decrypt key>
+	<sign private key>
+
+This script also populates `mesh_users.h` and `secret.h` in order to pass the necessary keys and salts to the system to perform the decryption and verifications.
 
 This script will also build the petalinux system components (U-Boot, Kernel, and FileSystem). The resulting images can be found in `Arty-Z7-10/images/linux`.
 Under the `hood`, `provisionSystem` runs these commands to build the system:
@@ -241,8 +247,8 @@ In summary, the organizers will build your system using the following procedure:
 ### provisionSystem.py
 
 During the system provisioning process, `provisionSystem.py` transforms the `Users.txt` and `default_games.txt` file into C header files, which are included in the MITRE Entertainment SHell.
-This provides access to the users and pins which are allowed to login to the system, as well as default game requirements.
-This script also generates a `bif` file to specify boot information, as well as an empty `FactorySecrets` file.
+This provides access to the users and encrypted hashs of the pins which are allowed to login to the system, as well as default game requirements.
+This script also generates a `bif` file to specify boot information, as well as populates the  `FactorySecrets` file.
 The `provisionSystem.py` script builds U-Boot, the Kernel, the Device Tree, and the FileSystem (INITRAMFS).
 Each of these components is described in greater detail below.
 
@@ -258,12 +264,12 @@ During the game provisioning process, `provisionGames.py` takes each entry in `G
 
 `<gameName>-v<gameVersion>`
 
-	version:<gameVersion>\nname:<gameName>\nusers:<user1> <user2>\n<gamebinary>
+	encryptedHeader{
+		version:<gameVersion>\nname:<gameName>\nusers:<user1>
+		<encryptedGameKey> ... <userN> <encryptedGameKey>
+	}
+	<encryptedGameBinary> <signatureOfFile>
 
-For example, for a 2048 game, the file would look as follows
-`2048-v1.0`
-
-	version:1.0\nname:2048users:demo\n\x90\x23\x23...
 
 ### packageSystem.py
 
@@ -288,7 +294,7 @@ As it is now, the game loader is functional, but simple.
 
 Location: `/ectf-collegiate/MES/Arty-Z7-10/project-spec/meta-user/recipes-apps/mesh-game-loader/files/main.c`
 
-This file loads the game from flash at location `0x1FC00000`. It first reads the size of the game as a 4 byte integer from `0x1FC00000` then reads this length of bytes at location `0x1FC00040`. It then parses out the first 3 metadata lines appended to the beginning of the game binary and writes the remaining bytes to a file. This creates a file in petalinux that is an executable binary.
+This file loads the game from flash at location `0x1FC00000`. It first reads the size of the game as a 4 byte integer from `0x1FC00000` then reads this length of bytes at location `0x1FC00040`. It then writes the remaining bytes to a file. This creates a file in petalinux that is an executable binary.
 
 #### startup.sh
 Location: `/ectf-collegiate/MES/Arty-Z7-10/project-spec/meta-user/recipes-apps/mesh-game-loader/files/startup.sh`
@@ -299,14 +305,14 @@ It is important to note that configuring the serial device must be done BEFORE p
 
 ### U-Boot and MESH Details
 
-The reference design implements MITRE Entertainment SHell in the Second Stage Bootloader (U-Boot).
+The design implements MITRE Entertainment SHell in the Second Stage Bootloader (U-Boot).
 The typical U-Boot shell has been replaced with a CLI which supports the command described in the rules and requirements documents.
 The details of how each command is implemented are described below to give you an idea of how to use the features of the Arty-Z7.
 
 #### Game Install Table
 
 Installed games and the associated user information are tracked in flash memory and in RAM while the system is booted.
-While running only the installed table in RAM is consulted, but changes are still reflected in the flash memory.
+While running only the installed table in RAM is consulted, but changes are still reflected in the flash memory, both encrypted and signed.
 This is done via a table in which each row contains a flag and depending on the value of the flag, a game name, and the user that the game is installed for.
 The row is a struct defined in `include/mesh.h`.
 
@@ -316,7 +322,7 @@ The flag can have 2 values.
 `0x01` - A game is currently installed.
 
 The game table must be valid for the commands below to work.
-A valid table is defined as one that starts at flash address `0x044` with an unsigned int that rpresents how many rows are in the table `num_rows`. At `0x48` it is made up of a contiguous series of `num_rows` row structs (`games_tbl_row`)
+A valid table is defined as one that starts at flash address `0x044` with an unsigned int that represents how many rows are in the table `num_rows`. At `0x48` it is made up of a contiguous series of `num_rows` row structs (`games_tbl_row`)
 This is achieved by using a sentinel to determine if the table is initialized.
 This sentinel is a random 4 byte value written at flash address `0x40`.
 If the sentinel value is found at `0x40` then the table is initialized. If it is not, then MESH writes the sentinel at `0x40` and writes a size of 0 to `0x44`.
@@ -382,7 +388,7 @@ Control is then passed to the kernel.
 
 Usage: `query`
 
-This command queries the ext4 partition of the SD card for all games and prints the name of each to stdout.
+This command queries the ext4 partition of the SD card for all games and prints the name of each to stdout if the user is allowed to install that game.
 This is done using the `mesh_query_ext4` function.
 This function is derived from the hush shell `ext4fs_ls` function provided by u-boot.
 The `mesh_query_ext4` function is a standalone function that sets the read device to the second partition on the sd card and
@@ -400,7 +406,7 @@ Arguments
 					sd card to install.
 
 This command installs the specified game name for the current user.
-The game must be in the games partition on the SD card.
+The game must be in the games partition on the SD card and the user must be allowed to install. The game is then decrypted and passed to petalinux.
 
 This command is implemented very similarly to the `list` command by looping through each row in the game table.
 However, when either the uninstalled game flag (`0x00`) or the end of table flag (`0xff`) is located, it writes the table row struct to that location in memory.
