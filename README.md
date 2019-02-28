@@ -312,7 +312,7 @@ The details of how each command is implemented are described below to give you a
 #### Game Install Table
 
 Installed games and the associated user information are tracked in flash memory and in RAM while the system is booted.
-While running only the installed table in RAM is consulted, but changes are still reflected in the flash memory.
+While running only the installed table in RAM is consulted, but changes are still reflected in the flash memory, both encrypted and signed.
 This is done via a table in which each row contains a flag and depending on the value of the flag, a game name, and the user that the game is installed for.
 The row is a struct defined in `include/mesh.h`.
 
@@ -322,7 +322,7 @@ The flag can have 2 values.
 `0x01` - A game is currently installed.
 
 The game table must be valid for the commands below to work.
-A valid table is defined as one that starts at flash address `0x044` with an unsigned int that rpresents how many rows are in the table `num_rows`. At `0x48` it is made up of a contiguous series of `num_rows` row structs (`games_tbl_row`)
+A valid table is defined as one that starts at flash address `0x044` with an unsigned int that represents how many rows are in the table `num_rows`. At `0x48` it is made up of a contiguous series of `num_rows` row structs (`games_tbl_row`)
 This is achieved by using a sentinel to determine if the table is initialized.
 This sentinel is a random 4 byte value written at flash address `0x40`.
 If the sentinel value is found at `0x40` then the table is initialized. If it is not, then MESH writes the sentinel at `0x40` and writes a size of 0 to `0x44`.
