@@ -213,7 +213,7 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         game_version = strsep(&decrypted_header,"\n");
         strsep(&decrypted_header,":");
         parsed_game_name = strsep(&decrypted_header,"\n");
-        end_game_name = decrypted_header - 2; // This is -2 because I don't want to include the newline
+        end_game_name = decrypted_header - 1; // This is -2 because I don't want to include the newline
 
         // get everything up to the first '.'. That's the major version
         char *temp_pointer = game_version;
@@ -225,7 +225,7 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         game->minor_version = simple_strtoul(minor_version_str, NULL, 10);
 
         memcpy(game->name, parsed_game_name, end_game_name - parsed_game_name);
-        game->name[(end_game_name - parsed_game_name) + 1] = '\0';
+        game->name[end_game_name - parsed_game_name] = '\0';
 
         // compare the header to provided name
         char* full_name = (char*) safe_malloc(game_name_len);
@@ -365,7 +365,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         game_version = strsep(&decrypted_header,"\n");
         strsep(&decrypted_header,":");
         parsed_game_name = strsep(&decrypted_header,"\n");
-        end_game_name = decrypted_header - 2; // this is -2 because I don't want to include the newline
+        end_game_name = decrypted_header - 1; // this is -2 because I don't want to include the newline
 
         // get everything up to the first '.'. That's the major version
         char *temp_pointer = game_version;
@@ -378,7 +378,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
 
         char * name = safe_malloc((end_game_name - parsed_game_name)+1);
         memcpy(name, parsed_game_name, end_game_name - parsed_game_name);
-        name[(end_game_name - parsed_game_name) + 1] = '\0';
+        name[end_game_name - parsed_game_name] = '\0';
 
         // compare the header to provided name
         char* full_name = (char*) safe_malloc(game_name_len);
