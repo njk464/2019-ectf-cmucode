@@ -97,10 +97,15 @@ def provision_game(line, user_array, header_key, sk):
     g_path = m.group(1)
     # Name of the game
     name = m.group(2)
+    if(len(name) > 31): return
     # Game version
     version = m.group(3)
+    if(len(version) > 10): return
     # List of users (strings) that are allowed to play this game
     game_users = m.group(4).split()
+    if(len(game_users) > 32): return
+    for users in game_users:
+        if(len(users) > 15): return
 
     # Open the path to the games in binary mode
     # try:

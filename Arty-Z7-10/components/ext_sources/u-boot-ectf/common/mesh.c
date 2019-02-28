@@ -32,8 +32,13 @@
 #define FLASH_CRYPTO_PAGE_SIZE (FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES - crypto_secretbox_MACBYTES - crypto_secretbox_BOXZEROBYTES)
 
 // declare user global
+
+
+// handles the current logged in user information
 User user;
+// Saved installed games table in RAM
 struct games_tbl_row *installed_games;
+// Number of installed games
 unsigned int installed_games_size = 0;
 
 // Security TODO: 
@@ -72,31 +77,34 @@ static void random_nonce(char* buf);
 /********************************** Flash Commands ****************************/
 /******************************************************************************/
 
-/*
-    This function initializes the game install table. If the the sentinel is 
-    written already, then, it does nothing, otherwise, it writes the sentinel 
-    and the MESH_TABLE_END flag to the beginning of the game install table.
-*/
+/**
+ * @brief This function initializes the game install table. If the the sentinel is 
+ *        written already, then, it does nothing, otherwise, it writes the sentinel 
+ *        and a size of 0 at the beginning of the install table
+ * @return 0 on success. !0 on failure
+ */
 int mesh_init_table(void)
 {
     /* Initialize the table where games will be installed */
     char* sentinel = (char*) safe_malloc(sizeof(char) * MESH_SENTINEL_LENGTH);
-    int ret = 1;
+    int ret = -1;
 
     ret = mesh_flash_read(sentinel, MESH_SENTINEL_LOCATION, MESH_SENTINEL_LENGTH);
     if (ret || *((unsigned int*) sentinel) != MESH_SENTINEL_VALUE)
     {
         installed_games_size = 0;
         mesh_write_install_table();
+        ret = 0;
     }
     free(sentinel);
     return ret;
 }
 
-/*
-    This function initialized the flash memory for the Arty Z7. This must be done
-    before executing any flash memory commands.
-*/
+
+/**
+ * @brief This function initialized the flash memory for the Arty Z7. This must be done
+ *        before executing any flash memory commands.
+ */
 int mesh_flash_init(void)
 {
     char* probe_cmd[] = {"sf", "probe", "0", "2000000", "0"};
@@ -105,14 +113,15 @@ int mesh_flash_init(void)
 }
 
 
-/*
-    This function reads flash_length bytes from the flash memory at flash_location
-    to the byte array data.
-*/
-int _mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_length)
+/**
+ * @brief This function reads a full page fom flash and stores the 
+ * 
+ * @param data buffer to read flash data to with size=FLASH_PAGE_SIZE
+ * @param page the flash page number to read from
+ * @return 0 on success. !0 on failure.
+ */
+int mesh_flash_read_page(void* data, unsigned int page)
 {
-    /* Read "flash_length" number of bytes from "flash_location" into "data" */
-
     // Find the sf sub command
     cmd_tbl_t* sf_tp = find_cmd("sf");
 
@@ -123,23 +132,23 @@ int _mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash
     char length_ptr[11] = "";
     // Convert the point to a string representation
     ptr_to_string(data, str_ptr);
-    ptr_to_string((unsigned int *) flash_location, offset_ptr);
-    ptr_to_string((unsigned int *) flash_length, length_ptr);
+    ptr_to_string((unsigned int *) (page * FLASH_PAGE_SIZE), offset_ptr);
+    ptr_to_string((unsigned int *) FLASH_PAGE_SIZE, length_ptr);
 
     // Perform an update
     char* read_cmd[] = {"sf", "read", str_ptr, offset_ptr, length_ptr};
     return sf_tp->cmd(sf_tp, 0, 5, read_cmd);
 }
 
-/*
- * This functions the writes the data to the specified flash page. The data 
- * should be page aligned. 
- *
- * args:
- *      data -> pointer to a buffer with size=FLASH_PAGE_SIZE
- *      page -> page # that needs to be updated
+
+/**
+ * @brief This functions the writes the data to the specified flash page. The data 
+ *        should be page aligned.
+ * 
+ * @param data pointer to a buffer with size=FLASH_PAGE_SIZE
+ * @param page page # that needs to be updated
  */
-int _mesh_flash_write(void* data, unsigned int page)
+void mesh_flash_write_page(void* data, unsigned int page)
 {
     // Find the sf sub command, defined by u-boot
     cmd_tbl_t* sf_tp = find_cmd("sf");
@@ -159,15 +168,18 @@ int _mesh_flash_write(void* data, unsigned int page)
     sf_tp->cmd(sf_tp, 0, 5, write_cmd);
 }
 
-/*
-    wrapper for mesh_flash_write that implements crypto
-*/
 
+/**
+ * @brief Writes flash_length bytes of encrypted data to flash_location in flash.
+ *        The first 56 bytes of each page are reserved for the NONCE and MAC
+ * 
+ * @param data pointer to a buffer with size=flash_length
+ * @param flash_location location to write to in flash
+ * @param flash_length number of bytes to write
+ * @return 0 on success. !0 on failure
+ */
 int mesh_flash_write(void* data, unsigned int flash_location, unsigned int flash_length)
 {
-    /* Write flash_length number of bytes starting at what's pointed to by data
-     * to address flash_location in flash.
-     */
     if (flash_length < 1)
         return 0;
 
@@ -188,9 +200,9 @@ int mesh_flash_write(void* data, unsigned int flash_location, unsigned int flash
             end_offset = flash_location + flash_length - new_offset + current_offset;
         }
 
+        // copy data into plain text buffer
         memcpy(&plain_text[crypto_secretbox_ZEROBYTES] + current_offset, data, end_offset - current_offset);
 
-        //TODO:  create a random nonce here
         random_nonce(cipher_text);
         // memset(cipher_text, 0, crypto_secretbox_NONCEBYTES);
         memset(plain_text, 0, crypto_secretbox_ZEROBYTES);
@@ -208,7 +220,7 @@ int mesh_flash_write(void* data, unsigned int flash_location, unsigned int flash
             return -1;
         }
     
-        _mesh_flash_write(cipher_text, page);
+        mesh_flash_write_page(cipher_text, page);
         new_offset += end_offset - current_offset;
         data += end_offset - current_offset;
     }
@@ -219,10 +231,16 @@ int mesh_flash_write(void* data, unsigned int flash_location, unsigned int flash
     return 0;
 }
 
-/*
-    This function reads flash_length bytes from the flash memory at flash_location
-    to the byte array data.
-*/
+
+/**
+ * @brief Read "flash_length" number of bytes from "flash_location" into "data".
+ *        Data read from flash is decrypted first
+ * 
+ * @param data pointer to a buffer with size=flash_length
+ * @param flash_location location to read from in flash
+ * @param flash_length number of bytes to read
+ * @return 0 on success. !0 on failure
+ */
 int mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_length)
 {
     /* Read "flash_length" number of bytes from "flash_location" into "data" */
@@ -237,7 +255,9 @@ int mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_
     unsigned int new_offset = flash_location; 
     while (new_offset - flash_location < flash_length) {
         unsigned int page = new_offset / FLASH_CRYPTO_PAGE_SIZE;
-        _mesh_flash_read(cipher_text, page * FLASH_PAGE_SIZE, FLASH_PAGE_SIZE);
+        if (mesh_flash_read_page(cipher_text, page)) {
+            return -1;
+        }
         
         // nonce is equal to the first 24 bytes of ct
         if (crypto_secretbox_open((unsigned char*) plain_text, 
@@ -281,10 +301,14 @@ int mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_
 /********************************** MESH Commands *****************************/
 /******************************************************************************/
 
-/* 
-    This function lists all commands available from the mesh shell. It
-    implements the help function in the mesh shell. 
-*/
+
+/**
+ * @brief This function lists all commands available from the mesh shell.
+ *        It implements the help function in the mesh shell. 
+ * 
+ * @param args arguments passed to the help command. They are ignored
+ * @return 0 on success
+ */
 int mesh_help(char **args)
 {
     /* List all valid commands */
@@ -300,10 +324,14 @@ int mesh_help(char **args)
     return 0;
 }
 
-/* 
-    This shuts down the mesh terminal. It does not shut down the board.
-    This implements the shutdown function in the mesh shell 
-*/
+
+/**
+ * @brief This shuts down the mesh terminal. It does not shut down the board.
+ *        This implements the shutdown function in the mesh shell.
+ * 
+ * @param args arguments passed to the shutdown command. They are ignored
+ * @return MESH_SHUTDOWN so that the mesh_loop knows to shutdown
+ */
 int mesh_shutdown(char **args)
 {
     /* Exit the shell completely */
@@ -313,11 +341,15 @@ int mesh_shutdown(char **args)
     return 0;
 }
 
-/* 
-   Log the current user out of mesh. The control loop brings the user
-   back to the login prompt. This implements the logout function in the mesh
-   shell.
-*/
+
+/**
+ * @brief Log the current user out of mesh. The control loop brings the user
+ *        back to the login prompt. This implements the logout function in the 
+ *        mesh shell.
+ * 
+ * @param args arguments passed to the logout command. They are ignored
+ * @return 0 on success
+ */
 int mesh_logout(char **args)
 {   
     /* Exit the shell, allow other user to login */
@@ -326,10 +358,14 @@ int mesh_logout(char **args)
     return 0;
 }
 
-/*
-    List all installed games for the given user. This implements the list
-    function in the mesh shell.
-*/
+
+/**
+ * @brief List all installed games for the given user. This implements the list
+ *        function in the mesh shell.
+ * 
+ * @param args arguments passed to the list command. They are ignored
+ * @return 0 on success or failure
+ */
 int mesh_list(char **args)
 {
     struct games_tbl_row *row;
@@ -347,14 +383,17 @@ int mesh_list(char **args)
     return 0;
 }
 
-/*
-    This function writes the specified game to ram address 0x1fc00040 and the
-    size of the specified game binary to 0x1fc00000. It then boots the linux
-    kernel from ram address 0x10000000. This allows the linux kernel to read the
-    binary and execute it to play the game..
 
-    This function implements the play function in mesh. 
-*/
+/**
+ * @brief This function writes the specified game to ram address 0x1fc00040 and the
+ *        size of the specified game binary to 0x1fc00000. It then boots the linux
+ *        kernel from ram address 0x10000000. This allows the linux kernel to read the
+ *        binary and execute it to play the game. 
+ *        This function implements the play function in mesh. 
+ * 
+ * @param args arguments passed to the play command. ["play", "game_name"]
+ * @return 0 on success or failure
+ */
 int mesh_play(char **args)
 {
     if (!mesh_play_validate_args(args)){
@@ -373,8 +412,6 @@ int mesh_play(char **args)
         return 0;
     }
     
-    // write game size to memory, 64 bytes
-
     char *game_binary = safe_malloc(size);
 
     if(crypto_get_game(game_binary, args[1], &user) == -1){
@@ -390,13 +427,6 @@ int mesh_play(char **args)
     cmd_tbl_t* mem_write_tp = find_cmd("mw.l");
     mem_write_tp->cmd(mem_write_tp, 0, 3, mw_argv);
 
-    // load game binary into memory
-    // char * const argv[5] = { "ext4load", "mmc", "0:2", "0x1fc00040", args[1]};
-    // cmd_tbl_t* load_tp = find_cmd("ext4load");
-
-    // load_tp->cmd(load_tp, 0, 5, argv);
-    // The decimal version of 
-    //void * ptr = {'0x40', '0x00', '0xc0', '0x1f'};
 
     char *from_str = (char *)safe_malloc(sizeof(void *) * 2 + 3);
     sprintf(from_str, "0x%p", (void *) game_binary);
@@ -404,11 +434,6 @@ int mesh_play(char **args)
     cmd_tbl_t* cp_tp = find_cmd("cp");
     cp_tp->cmd(cp_tp, 0, 4, cp_argv);
 
-
-
-    //char * const load_argv[3] = { "mw", "0x1fc00040", game_binary};
-    //cmd_tbl_t* mem_write_game_tp = find_cmd("mw");
-    //mem_write_game_tp->cmd(mem_write_game_tp, 0, 3, load_argv);
 
 
     // cleanup - this is here because boot may not execute following commands
@@ -425,9 +450,13 @@ int mesh_play(char **args)
     return 0;
 }
 
-/*
-    This function lists all games that are on the sd card that are available for installation
-*/
+
+/**
+ * @brief This function lists all games that are on the sd card that are available for installation
+ * 
+ * @param args arguments passed to the query command. They are ignored
+ * @return 0 on success or failure
+ */
 int mesh_query(char **args)
 {
     /* List all games available to download */
@@ -436,12 +465,14 @@ int mesh_query(char **args)
 }
 
 
-/*
-    This function installs the given game for the specified user. 
-    It finds the next available spot in the install table.
-
-    It implements the install function of the mesh shell.
-*/
+/**
+ * @brief This function installs the given game for the specified user.
+ *        It finds the next available spot in the install table.
+ *        It implements the install function of the mesh shell.
+ * 
+ * @param args arguments passed to the install command. ["install", "game_name"]
+ * @return 0 on success or failure
+ */
 int mesh_install(char **args)
 {
     /* Install the game */
@@ -522,14 +553,15 @@ int mesh_install(char **args)
 }
 
 
-/*
-    This function uninstalls the specified game for the given user.
-    This function implements the uninstall function of the mesh shell.
-*/
+/**
+ * @brief This function uninstalls the specified game for the given user.
+ * 
+ * @param args arguments passed to the uninstall command. ["uninstall", "game_name"]
+ * @return 0 on success or failure
+ */
 int mesh_uninstall(char **args)
 {
     /* Remove the game for this user*/
-    /* List all of the installed games for this user */
 
     if (!mesh_game_installed(args[1])) {
         printf("%s is not installed for %s.\n", args[1], user.name);
@@ -1064,69 +1096,7 @@ int mesh_check_downgrade(char *game_name, unsigned int major_version, unsigned i
     return return_value;
 }
 
-/*
-    This function extract the game info from the header of a game file.
-*/
-// void mesh_get_game_header(Game *game, char *game_name){
-//     loff_t game_size;
-//     int i = 0;
-//     int j = 0;
 
-//     // get the size of the game
-//     game_size = mesh_size_ext4(game_name);
-//     printf("game_size: %lld\n", game_size);
-//     printf("game name: %s\n", game_name);
-
-//     // read the game into a buffer
-//     char* game_buffer = (char*) malloc(game_size + 1);
-//     mesh_read_ext4(game_name, game_buffer, game_size);
-
-//     // get the version, located on the first line. will always be major.minor
-
-//     // remove the string "version"
-//     strtok(game_buffer, ":");
-//     // get everything up to the first '.'. That's the major version
-//     char* major_version_str = strtok(NULL, ".");
-//     // get after the '.'. That's the minor version
-//     char* minor_version_str = strtok(NULL, "\n");
-
-//     // get the name, located after "name:"
-//     char* name = strtok(NULL, ":");
-//     name = strtok(NULL, "\n");
-
-//     // get the users, located after "users:"
-//     char* users = strtok(NULL, ":");
-//     users = strtok(NULL, "\n");
-
-//     // copy major and minor version into struct
-//     game->major_version = simple_strtoul(major_version_str, NULL, 10);
-//     game->minor_version = simple_strtoul(minor_version_str, NULL, 10);
-
-//     // copy name
-//     for (i=0; i<MAX_GAME_LENGTH && name[i] != '\0'; i++){
-//         game->name[i] = name[i];
-//     }
-//     game->name[i] = '\0';
-
-//     // copy users
-//     int strplace = 0;
-//     for (i=0; i<MAX_NUM_USERS && users[strplace] != '\0'; i++){
-//         for (j=0; j<=MAX_USERNAME_LENGTH && users[strplace] != ' ' && users[strplace] != '\0'; j++){
-//             game->users[i][j] = users[strplace++];
-//         }
-
-//         // increment past space if you are there
-//         if (users[strplace] == ' '){
-//             strplace++;
-//         }
-
-//         // null terminate user
-//         game->users[i][j] = '\0';
-//     }
-//     game->num_users = i;
-
-//     free(game_buffer);
-// }
 /*
  *  TODO: Change to magic values.
     This function reads in the specified game and ensures that the user is
@@ -1302,9 +1272,8 @@ int mesh_validate_user(User *user)
      * Retruns 0 on success and 1 on failure. */
     for (int i = 0; i < NUM_MESH_USERS; ++i)
     {
-        if (strcmp(mesh_users[i].username, user->name) == 0 &&
-            bcrypt_checkpass(user->pin, mesh_users[i].hash) == 0)
-        {
+        if (strcmp(mesh_users[i].username, user->name) == 0) {
+            // second check is implemented within bcrypt so the hash is not calculated twice
             if (bcrypt_checkpass(user->pin, mesh_users[i].hash) == 0) {
                 return 0;
             }
@@ -1313,7 +1282,7 @@ int mesh_validate_user(User *user)
             }
         }
     }
-    // run bcrypt even if no 
+    // run bcrypt even if the user is not found
     bcrypt_checkpass(user->pin, default_hash);
     return 1;
 }
