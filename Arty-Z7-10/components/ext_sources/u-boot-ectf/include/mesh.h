@@ -8,6 +8,8 @@
 #define MAX_USERNAME_LENGTH 15
 #define MAX_PIN_LENGTH 8
 #define MAX_GAME_LENGTH 31
+#define MAX_INT_STR_LENGTH (sizeof(int) * 2 + 3)
+#define MAX_VERSION_LENGTH MAX_INT_STR_LENGTH
 #define MAX_NUM_USERS 32
 #define MAX_GAMES 128
 
@@ -18,7 +20,6 @@
 
 #define MESH_TABLE_UNINSTALLED 0x00
 #define MESH_TABLE_INSTALLED 0x01
-#define MESH_TABLE_END 0xff
 
 #define MAX_LOGIN_ATTEMPTS 2
 #define LOGIN_TIMEOUT 5000 // 5-seconds
@@ -27,6 +28,22 @@
 // To erase (or call update) on flash, it needs to be done
 // on boundaries of size 64K
 #define FLASH_PAGE_SIZE 65536
+
+#define MESH_TOK_BUFSIZE 64
+#define MESH_TOK_DELIM " \t\r\n\a"
+#define MESH_RL_BUFSIZE 1024
+#define MESH_SHUTDOWN -2
+
+// INSTALL ERROR CODES
+#define INSTALL_INVALID_LENGTH 2
+#define INSTALL_NO_GAME_EXISTS 3
+#define INSTALL_USER_NOT_ALLOWED 4
+#define INSTALL_DOWNGRADE 5
+#define INSTALL_INSTALLED 6
+#define INSTALL_LIMIT_REACHED 7
+#define INSTALL_INVALID_SIGNATURE 8
+#define INSTALL_UNKNOWN_ERROR -1
+
 
 
 /**
