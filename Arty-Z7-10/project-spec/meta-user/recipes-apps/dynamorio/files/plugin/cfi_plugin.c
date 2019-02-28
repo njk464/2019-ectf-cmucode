@@ -31,32 +31,11 @@
  * DAMAGE.
  */
 
-/* Code Manipulation API Sample:
- * empty.c
- *
- * Serves as an example of an empty client that does nothing but
- * register for the exit event.
- */
-
 #include "dr_api.h"
 #include <stddef.h>
 #include <sys/syscall.h>
 
-#define COND_EQ 0
-#define COND_NE 1
-#define COND_CS 2
-#define COND_CC 3
-#define COND_MI 4
-#define COND_PL 5
-#define COND_VS 6
-#define COND_VC 7
-#define COND_HI 8
-#define COND_LS 9
-#define COND_GE 10
-#define COND_LT 11
-#define COND_GT 12
-#define COND_LE 13
-#define COND_AL 14
+/***** DEFINES *****/
 
 //#define DEBUG
 
@@ -64,10 +43,82 @@
 #undef report_app_problem
 
 #ifdef DEBUG
-#define DPRINT(format,...) (dr_printf(format, ##__VA_ARGS__))
+#define DPRINT(format,...)  (dr_fprintf(STDOUT, format, ##__VA_ARGS__))
+#define DERR(format,...)    (dr_fprintf(STDOUT, format, ##__VA_ARGS__))
 #else
+#define DERR(format,...)  
 #define DPRINT(format,...)
 #endif
+
+
+#define IMP(bb, w, i)       (instrlist_meta_preinsert((bb), (w), (i)))
+#define OCR(r)              (opnd_create_reg((r)))
+#define OUI(i, sz)          (opnd_create_immed_uint((i), (sz)))
+#define OBD(b, i, s, d, sz) (opnd_create_base_disp((b), (i), (s), (d), (sz)))
+
+#define MAX_SHADOW_SIZE 800
+
+/***** STATIC GLOBALS AND STRUCTS *****/
+
+static bool found_main = false;
+static bool run_main = false;
+static app_pc main_entry = NULL;
+
+struct thread_info
+{
+    int regset;
+    int shadow_count;
+    app_pc shadow_stack[MAX_SHADOW_SIZE];
+};
+
+/***** REGSET MANIP *****/
+
+void regset_clear(struct thread_info *tls)
+{
+    tls->regset = 1 << dr_get_stolen_reg();
+}
+
+void regset_freeze(struct thread_info *tls, reg_id_t id)
+{
+    tls->regset |= (1 << id);
+}
+
+reg_id_t regset_get(struct thread_info *tls)
+{
+    reg_id_t id;
+
+    for (id = DR_REG_R0; id <= DR_REG_R10; id++)
+    {
+        if (tls->regset & (1 << id)) continue;
+        tls->regset |= (1 << id);
+        return id;
+    }
+
+    DERR("Insufficient registers.\n");
+    dr_abort();
+    return DR_REG_INVALID;
+}
+
+void regset_put(struct thread_info *tls, reg_id_t id)
+{
+    if (id == dr_get_stolen_reg())
+    {
+        DERR("Cannot put stolen reg.\n");
+        dr_abort();
+        return;
+    }
+
+    if (tls->regset & (1 << id))
+    {
+        tls->regset &= ~(1 << id);
+        return;
+    }
+
+    DERR("Register %d already free.\n", id);
+    dr_abort();
+}
+
+/***** SYSCALL FILTER *****/
 
 static bool
 syscall_check(int sysnum)
@@ -83,7 +134,6 @@ syscall_check(int sysnum)
             sysnum == SYS_bpf ||
             sysnum == SYS_clock_adjtime ||
             sysnum == SYS_clock_settime ||
-            sysnum == SYS_clone ||
             sysnum == SYS_delete_module ||
             sysnum == SYS_finit_module ||
             sysnum == SYS_get_mempolicy ||
@@ -143,264 +193,475 @@ event_pre_syscall(void *drcontext, int sysnum)
     return true;
 }
 
-static bool
-has_call(instrlist_t *bb)
-{
-    /*
-     * Checks if the last instruction is a BL, BLX or BLX_IND.
-     * WARN: Calls should be the last instruction in a BB!
-     */
+/***** OTHER INSTRUMENTATION *****/
 
-    return instr_is_call(instrlist_last_app(bb));
-}
-
-static bool
-has_ret(instrlist_t *bb)
-{
-    /*
-     * Check for returns.
-     * WARN: Rets should be the last instruction in a BB!
-     */
-    
-    return instr_is_return(instrlist_last_app(bb));
-}
-
-/* TODO: Too heavyweight, factor out all these calls */
+#ifdef DEBUG
 static void
-bb_instrument_call()
+bb_instrument_entry(uint next_l, uint next_h)
 {
-    //instr_t instr;
-    //void *drcontext;
-    //dr_mcontext_t mcontext;
-
-    //drcontext = dr_get_current_drcontext();
-    //dr_get_mcontext(drcontext, &mcontext);
-    //instr_init(drcontext, &instr);
-    //disassemble(drcontext, mcontext.pc, STDOUT);
-    //printf("Target: %p\n", instr_get_branch_target_pc(
-}
-
-static void
-bb_instrument_call_cond()
-{
-}
-
-static void
-bb_instrument_ret(uint is_stack, uint addr, uint offset)
-{
-    uint real_addr;
-    uint thumb;
-    //instr_t instr2, instr4;
+    int i;
+    app_pc res;
     void *drcontext;
+    struct thread_info *tls;
 
-    /* Calculate actual address */
-    if (!is_stack)
-    {
-        real_addr = addr;
-    }
-    else
-    {
-        real_addr = *(uint *)(addr + offset);
-    }
+    if (!found_main) return;
 
-    thumb = real_addr & 1;
-    real_addr = real_addr & ~1;
-    DPRINT("Found ret addr: %p\n", real_addr);
-
-    /*
-     * Check valid - Don't know how to force disassembly mode so
-     * doing this manually
-     */
     drcontext = dr_get_current_drcontext();
-    //instr_init(drcontext, &instr2);
-    //instr_init(drcontext, &instr4);
-    //decode(drcontext, (byte *)(real_addr - 2), &instr2);
-    //decode(drcontext, (byte *)(real_addr - 4), &instr4);
-    if (thumb)
-    {
-        DPRINT("Thumb:\n");
-        DPRINT("-4: %hx\n-2: %hx\n", *(ushort *)(real_addr - 4), *(ushort *)(real_addr - 2));
+    tls = (struct thread_info *)dr_get_tls_field(drcontext);
+
 #ifdef DEBUG
-        disassemble(drcontext, real_addr - 2, STDOUT);
-        disassemble(drcontext, real_addr - 4, STDOUT);
-#endif
-        if ((*(byte *)(real_addr - 3) & 0xf8) != 0xf0 &&              /* BL/BLX imm */
-            (*(ushort *)(real_addr - 2) & 0xff87) != 0x4780)          /* BLX reg */
-        {
-            DPRINT("Very bad cat!\n");
-            dr_abort();
-        }
-    }
-    else
+    DPRINT("I'm calling!\n");
+
+    DPRINT("STACK: ");
+    for (i = 0; i < tls->shadow_count; i++)
     {
-        DPRINT("Arm:\n");
-        DPRINT("-4: %x\n", *(uint *)(real_addr - 4));
-#ifdef DEBUG
-        disassemble(drcontext, real_addr - 2, STDOUT);
-        disassemble(drcontext, real_addr - 4, STDOUT);
-#endif
-        if ((*(byte *)(real_addr - 1) & 0x0f) != 0x0b &&              /* BL imm */
-            (*(byte *)(real_addr - 1) & 0xfe) != 0xfa &&              /* BLX imm */
-            (*(uint *)(real_addr - 4) & 0x0ffffff0) != 0x012fff30)    /* BLX reg */
-        {
-            DPRINT("Very bad cat!\n");
-            dr_abort();
-        }
+        DPRINT("%p ", tls->shadow_stack[i]);
     }
+    DPRINT("\n");
+#endif
+
+    if (tls->shadow_count >= MAX_SHADOW_SIZE)
+    {
+        DERR("Call stack depth exceeded.\n");
+        dr_abort();
+    }
+
+    res = (app_pc)((next_h << 16) + next_l);
+    tls->shadow_stack[tls->shadow_count++] = res;
+
+#ifdef DEBUG
+    DPRINT("STACK AFT: ");
+    for (i = 0; i < tls->shadow_count; i++)
+    {
+        DPRINT("%p ", tls->shadow_stack[i]);
+    }
+    DPRINT("\n");
+#endif
 }
+#endif
 
 static void
-bb_instrument_ret_cond()
+insert_entry_instr(void *drcontext, void *tag, instrlist_t *bb,
+                   app_pc next)
 {
+    reg_id_t stolen;
+    reg_id_t flags, tls_base, imm, count, next_reg, stack_addr;
+    struct thread_info *tls;
+    instr_t *where;
+    instr_t *l_not_found_main, *l_no_abort;
+
+    where = instrlist_last_app(bb);
+
+    tls = (struct thread_info *)dr_get_tls_field(drcontext);
+    regset_clear(tls);
+
+    stolen = dr_get_stolen_reg();
+
+    flags = regset_get(tls);
+    dr_save_reg(drcontext, bb, where, flags, SPILL_SLOT_1);
+    IMP(bb, where,
+        INSTR_CREATE_mrs(drcontext, OCR(flags), OCR(DR_REG_CPSR)));
+
+    imm = regset_get(tls);
+    dr_save_reg(drcontext, bb, where, imm, SPILL_SLOT_2);
+    instrlist_insert_mov_immed_ptrsz(drcontext, (uint)&found_main,
+                                     OCR(imm), bb, where, NULL, NULL);
+    IMP(bb, where,
+        INSTR_CREATE_ldrb(drcontext, OCR(imm),
+                          OBD(imm, DR_REG_NULL, 0, 0, OPSZ_1)));
+
+    l_not_found_main = INSTR_CREATE_label(drcontext);
+    IMP(bb, where,
+        INSTR_CREATE_cmp(drcontext, OCR(imm), OUI(0, OPSZ_4)));
+    IMP(bb, where,
+        INSTR_PRED(INSTR_CREATE_b(drcontext, opnd_create_instr(l_not_found_main)),
+                   DR_PRED_EQ));
+
+    tls_base = regset_get(tls);
+    dr_save_reg(drcontext, bb, where, tls_base, SPILL_SLOT_3);
+    dr_insert_read_tls_field(drcontext, bb, where, tls_base);
+
+    count = regset_get(tls);
+    dr_save_reg(drcontext, bb, where, count, SPILL_SLOT_4);
+    IMP(bb, where,
+        INSTR_CREATE_ldr(drcontext, OCR(count),
+                         OBD(tls_base, DR_REG_NULL, 0,
+                             (uint)offsetof(struct thread_info, shadow_count),
+                             OPSZ_4)));
+
+    l_no_abort = INSTR_CREATE_label(drcontext);
+    instrlist_insert_mov_immed_ptrsz(drcontext, MAX_SHADOW_SIZE - 1, OCR(imm),
+                                     bb, where, NULL, NULL);
+    IMP(bb, where,
+        INSTR_CREATE_cmp(drcontext, OCR(count), OCR(imm)));
+    IMP(bb, where,
+        INSTR_PRED(INSTR_CREATE_b(drcontext, opnd_create_instr(l_no_abort)),
+                   DR_PRED_LS));
+
+    dr_insert_call(drcontext, bb, where, dr_abort, 0);
+
+    IMP(bb, where, l_no_abort);
+    instrlist_insert_mov_immed_ptrsz(drcontext, (uint)next, OCR(imm),
+                                     bb, where, NULL, NULL);
+
+    stack_addr = regset_get(tls);
+    dr_save_reg(drcontext, bb, where, stack_addr, SPILL_SLOT_5);
+    IMP(bb, where,
+        INSTR_CREATE_add(drcontext, OCR(stack_addr), OCR(tls_base),
+                         OUI((uint)offsetof(struct thread_info, shadow_stack), OPSZ_4)));
+
+    IMP(bb, where,
+        INSTR_CREATE_str(drcontext,
+                         OBD(stack_addr, count, 4, 0, OPSZ_4),
+                         OCR(imm)));
+    IMP(bb, where,
+        INSTR_CREATE_add(drcontext, OCR(count), OCR(count), OUI(1, OPSZ_4)));
+    IMP(bb, where,
+        INSTR_CREATE_str(drcontext,
+                         OBD(tls_base, DR_REG_NULL, 0,
+                             (uint)offsetof(struct thread_info, shadow_count),
+                             OPSZ_4),
+                         OCR(count)));
+
+    dr_restore_reg(drcontext, bb, where, stack_addr, SPILL_SLOT_5);
+    
+    dr_restore_reg(drcontext, bb, where, count, SPILL_SLOT_4);
+
+    dr_restore_reg(drcontext, bb, where, tls_base, SPILL_SLOT_3);
+
+    IMP(bb, where, l_not_found_main);
+    dr_restore_reg(drcontext, bb, where, imm, SPILL_SLOT_2);
+
+    IMP(bb, where,
+        INSTR_CREATE_msr(drcontext, OCR(DR_REG_CPSR),
+                         OPND_CREATE_INT_MSR_NZCVQG(),
+                         OCR(flags)));
+    dr_restore_reg(drcontext, bb, where, flags, SPILL_SLOT_1);
+
+    /*
+    dr_insert_clean_call(drcontext, bb, instrlist_last(bb),
+                         bb_instrument_entry, false, 2,
+                         opnd_create_immed_uint((uint)next & 0xffff, OPSZ_2),
+                         opnd_create_immed_uint((uint)next >> 16, OPSZ_2));
+    */
 }
 
 static instr_t *
-get_it_instr(void *drcontext, instr_t *target)
+get_it_instr(instr_t *target)
 {
-    /*
-     * Find itxxx instruction containing the call/ret.
-     * itxxx instructions cannot nest.
-     * itxxx instructions can only have branches at the end of their block.
-     * At most one branch per block.
-     * WARN: Might need to use instruction init/reset/decode/free
-     */
-
     int i = 4, j;
     instr_t *instrp;
 
-    /* Unpredicated instrs are safe to instrument */
     if (!instr_get_predicate(target)) return NULL;
 
-    /* Instruction is in some IT block */
     for (instrp = instr_get_prev(target); i && instrp;
          i--, instrp = instr_get_prev(instrp))
     {
-        if (instr_get_opcode(instrp) == OP_it)
-        {
-            DPRINT("IT count: %d\n", instr_it_block_get_count(instrp));
-            for (j = 0; j < instr_it_block_get_count(instrp); j++)
-            {
-                DPRINT("IT pred %d: %d\n", j, instr_it_block_get_pred(instrp, j));
-            }
-            return instrp;
-        }
+        if (instr_get_opcode(instrp) == OP_it) return instrp;
     }
 
     return NULL;
 }
 
 static void
-insert_call_instr(void *drcontext, void *tag, instrlist_t *bb)
+bb_instrument_exit(bool is_stack, app_pc addr, int offset,
+                   dr_pred_type_t exit_pred)
 {
-    instr_t *instrp, *call;
-    opnd_t call_opnd;
+    int i;
+    app_pc ret_addr;
+    void *drcontext;
+    dr_mcontext_t mc = { sizeof(mc), DR_MC_CONTROL };
+    uint cpsr;
+    bool Z, C, N, V, cond;
+    struct thread_info *tls;
 
-    call = instrlist_last_app(bb);
-    instrp = get_it_instr(drcontext, call);
-    if (!instrp)
+    if (!found_main) return;
+
+    drcontext = dr_get_current_drcontext();
+    tls = (struct thread_info *)dr_get_tls_field(drcontext);
+
+    /* Check for predicated returns */
+    if (exit_pred)
     {
-        dr_insert_clean_call(drcontext, bb, call,
-                             bb_instrument_call, false, 0);
-    }
-    else
-    {
-        dr_insert_clean_call(drcontext, bb, instrp,
-                             bb_instrument_call_cond, false, 0);
+        dr_get_mcontext(drcontext, &mc);
+        cpsr = mc.cpsr;
+        DPRINT("Predicate: %d\n", exit_pred);
+        DPRINT("CPSR: %x\n", cpsr);
+        N = ((cpsr & 0x80000000) != 0);
+        Z = ((cpsr & 0x40000000) != 0);
+        C = ((cpsr & 0x20000000) != 0);
+        V = ((cpsr & 0x10000000) != 0);
+        switch (exit_pred)
+        {
+            case DR_PRED_EQ:
+                cond = Z;
+                break;
+            case DR_PRED_NE:
+                cond = !Z;
+                break;
+            case DR_PRED_CS:
+                cond = C;
+                break;
+            case DR_PRED_CC:
+                cond = !C;
+                break;
+            case DR_PRED_MI:
+                cond = N;
+                break;
+            case DR_PRED_PL:
+                cond = !N;
+                break;
+            case DR_PRED_VS:
+                cond = V;
+                break;
+            case DR_PRED_VC:
+                cond = !V;
+                break;
+            case DR_PRED_HI:
+                cond = (C && !Z);
+                break;
+            case DR_PRED_LS:
+                cond = (!C || Z);
+                break;
+            case DR_PRED_GE:
+                cond = (N == V);
+                break;
+            case DR_PRED_LT:
+                cond = (N != V);
+                break;
+            case DR_PRED_GT:
+                cond = (!Z && (N == V));
+                break;
+            case DR_PRED_LE:
+                cond = (Z || (N != V));
+                break;
+            case DR_PRED_AL:
+            default:
+                cond = 1;
+                break;
+        }
+
+        if (!cond)
+        {
+            DPRINT("Condition not satisfied.\n");
+            return;
+        }
     }
 
-    if (instr_is_call_direct(call))
-    {
-        DPRINT("Call target: %p\n", instr_get_branch_target_pc(call));
-    }
-    else
-    {
-        call_opnd = instr_get_src(call, instr_num_srcs(call) - 1);
-        DPRINT("Call target operand: ");
+    ret_addr = is_stack ? *(app_pc *)(addr + offset) : addr;
+    ret_addr = (app_pc)((uint)ret_addr & ~1);
+
 #ifdef DEBUG
-        opnd_disassemble(drcontext, call_opnd, STDOUT);
-#endif
-        DPRINT("\n");
-    }
-}
-
-static void
-insert_ret_instr(void *drcontext, void *tag, instrlist_t *bb)
-{
-    instr_t *instrp, *ret;
-    opnd_t ret_opnd, op2;
-
-    ret = instrlist_last_app(bb);
-
-    /* Find IT block if applicable */
-    instrp = get_it_instr(drcontext, ret);
-
-    /* Returns are always indirect */
-    ret_opnd = instr_get_src(ret, instr_num_srcs(ret) - 1);
-    DPRINT("Return target operand: ");
-#ifdef DEBUG
-    opnd_disassemble(drcontext, ret_opnd, STDOUT);
-#endif
-    
-    /* Extract offset if sp. src should be LR or SP generally. */
-    if (opnd_get_reg(ret_opnd) == DR_REG_SP)
+    DPRINT("STACK: ");
+    for (i = 0; i < tls->shadow_count; i++)
     {
-        /*
-         * -1 for sp and -1 for 0 indexing
-         * Assumes LDM(IA), i.e. normal push/pop behavior
-         */
-        DPRINT(" + 0x%x", (instr_num_dsts(ret) - 2) * 4);
+        DPRINT("%p ", tls->shadow_stack[i]);
     }
     DPRINT("\n");
 
-    if (!instrp)
+    DPRINT("RET: %p\n", ret_addr);
+#endif
+
+    while (tls->shadow_count)
     {
-        if (opnd_get_reg(ret_opnd) == DR_REG_LR)
+        if (tls->shadow_stack[--tls->shadow_count] == ret_addr)
         {
-            dr_insert_clean_call(drcontext, bb, ret,
-                                 bb_instrument_ret, false, 3,
-                                 opnd_create_immed_uint(0, OPSZ_4),
-                                 ret_opnd,
-                                 opnd_create_immed_uint(0, OPSZ_4));
+#ifdef DEBUG
+            DPRINT("STACK AFT: ");
+            for (i = 0; i < tls->shadow_count; i++)
+            {
+                DPRINT("%p ", tls->shadow_stack[i]);
+            }
+            DPRINT("\n");
+#endif
+            return;
         }
-        else
-        {
-            /*op2 = opnd_create_base_disp(DR_REG_SP, DR_REG_NULL, 0,
-                                        (instr_num_dsts(ret) - 2) * 4, 4);*/
-            dr_insert_clean_call(drcontext, bb, ret,
-                                 bb_instrument_ret, false, 3,
-                                 opnd_create_immed_uint(1, OPSZ_4),
-                                 ret_opnd,
-                                 opnd_create_immed_uint((instr_num_dsts(ret) - 2) * 4, OPSZ_4));
-        }
+        DPRINT("Mismatch!\n");
+    }
+
+    DERR("No more food...\n");
+    dr_abort();
+}
+
+static void
+insert_exit_instr(void *drcontext, void *tag, instrlist_t *bb)
+{
+    /* Assume normal stack functionality */
+    instr_t *instrp, *exit;
+    opnd_t exit_opnd;
+    dr_pred_type_t exit_pred;
+
+    exit = instrlist_last_app(bb);
+
+    /* Find safe insertion point */
+    instrp = get_it_instr(exit);
+    instrp = instrp ? instrp : exit;
+
+    /* Extract operand, LR/SP */
+    exit_opnd = instr_get_src(exit, instr_num_srcs(exit) - 1);
+
+    /* Extract predicate */
+    exit_pred = instr_get_predicate(exit);
+
+    DPRINT("FOUND PRED: %d\n", exit_pred);
+
+    /* FIXME: Check for stack cleanup in IT block */
+    if (opnd_get_reg(exit_opnd) == DR_REG_LR)
+    {
+        dr_insert_clean_call(drcontext, bb, instrp,
+                             bb_instrument_exit, false, 4,
+                             opnd_create_immed_uint(0, OPSZ_1),
+                             exit_opnd,
+                             opnd_create_immed_int(0, OPSZ_1),
+                             opnd_create_immed_int(exit_pred, OPSZ_1));
     }
     else
     {
-        /* Not now */
-        //dr_insert_clean_call(drcontext, bb, instrp,
-        //                     bb_instrument_ret, false, 0);
+        /*
+         * -1 for SP, -1 for 0-indexing
+         * Always fits in 1 byte
+         */
+        dr_insert_clean_call(drcontext, bb, instrp,
+                             bb_instrument_exit, false, 4,
+                             opnd_create_immed_uint(1, OPSZ_1),
+                             exit_opnd,
+                             opnd_create_immed_int((instr_num_dsts(exit) - 2) * 4,
+                                                   OPSZ_1),
+                             opnd_create_immed_int(exit_pred, OPSZ_1));
+    }
+}
+
+static bool
+match_crt_signature(instrlist_t *bb)
+{
+    instr_t *instrp;
+    byte *raw;
+
+    instrp = instrlist_first_app(bb);
+    raw = instr_get_raw_bits(instrp);
+
+    if (*(uint *)raw == 0xe3a0b000)
+    {
+        instrp = instr_get_next(instrp);
+        if (!instrp) return false;
+        raw = instr_get_raw_bits(instrp);
+        return *(uint *)raw == 0xe3a0e000;
     }
 
+    if (*(uint *)raw == 0x0b00f04f)
+    {
+        instrp = instr_get_next(instrp);
+        if (!instrp) return false;
+        raw = instr_get_raw_bits(instrp);
+        return *(uint *)raw == 0x0e00f04f;
+    }
+
+    return false;
+}
+
+static void
+crt_grab_main(app_pc app_main)
+{
+    DPRINT("Found main at %p.\n", (app_pc)((uint)app_main & ~1));
+    main_entry = (app_pc)((uint)app_main & ~1);
+}
+
+static void
+insert_crt_instr(void *drcontext, void *tag, instrlist_t *bb)
+{
+    dr_insert_clean_call(drcontext, bb, instrlist_last_app(bb),
+                         crt_grab_main, false, 1,
+                         opnd_create_reg(DR_REG_R0));
+}
+
+static void
+shadow_main_lr(app_pc app_main_lr)
+{
+    void *drcontext;
+    struct thread_info *tls;
+
+    if (run_main) return;
+    drcontext = dr_get_current_drcontext();
+    tls = (struct thread_info *)dr_get_tls_field(drcontext);
+    tls->shadow_stack[tls->shadow_count++] = (app_pc)((uint)app_main_lr & ~1);
+    run_main = true;
+}
+
+static void
+insert_main_instr(void *drcontext, void *tag, instrlist_t *bb)
+{
+    dr_insert_clean_call(drcontext, bb, instrlist_first_app(bb),
+                         shadow_main_lr, false, 1,
+                         opnd_create_reg(DR_REG_LR));
 }
 
 static dr_emit_flags_t
 event_bb(void *drcontext, void *tag, instrlist_t *bb,
          bool for_trace, bool translating)
 {
+    instr_t *instrp = NULL;
+    opnd_t opnd, opnd1, opnd2;
+    app_pc pc;
+
+    DPRINT("=========================\n");
+
     if (for_trace || translating)
     {
+        DPRINT("Skipping\n");
         return DR_EMIT_DEFAULT;
     }
 
-    DPRINT("======================\n");
+    instrp = instrlist_last_app(bb);
+    pc = instr_get_app_pc(instrp);
 
-    if (has_call(bb))
+    if (instr_is_call(instrp))
     {
-        /* Not now */
-        //insert_call_instr(drcontext, tag, bb);
+        /* FIXME: Not handling predicated */
+        insert_entry_instr(drcontext, tag, bb, pc + instr_length(drcontext, instrp));
     }
-    else if (has_ret(bb))
+    else if (instr_is_return(instrp))
     {
-        insert_ret_instr(drcontext, tag, bb);
+        /*
+         * ldr pc, [lr, xx] is usually not a return and is used in PLT,
+         * but passes instr_is_return.
+         * However, ldr pc, [sp], #4 is a common return when only LR is pushed.
+         */
+        if (instr_get_opcode(instrp) != OP_ldr)
+        {
+            insert_exit_instr(drcontext, tag, bb);
+        }
+        else if (instr_num_srcs(instrp) == 3)
+        {
+            opnd = instr_get_src(instrp, 0);
+            opnd2 = instr_get_src(instrp, 2);
+            if (opnd_is_base_disp(opnd) &&
+                opnd_is_reg(opnd2) &&
+                opnd_get_reg(opnd2) == DR_REG_SP)
+            {
+                insert_exit_instr(drcontext, tag, bb);
+            }
+        }
+    }
+
+    /* Attempt to find main */
+    if (!main_entry)
+    {
+        /* Attempt instrumentation */
+        if (match_crt_signature(bb) && instr_is_call(instrp))
+        {
+            DPRINT("Found CRT.\n");
+            insert_crt_instr(drcontext, tag, bb);
+        }
+    }
+    else if (!found_main)
+    {
+        /* Wait until main */
+        if (instr_get_app_pc(instrlist_first_app(bb)) == main_entry)
+        {
+            DPRINT("Reached main.\n");
+            found_main = true;
+            insert_main_instr(drcontext, tag, bb);
+        }
     }
 
 #ifdef DEBUG
@@ -411,18 +672,33 @@ event_bb(void *drcontext, void *tag, instrlist_t *bb,
 }
 
 static void
-event_fail(void *drcontext, void *tag, dr_mcontext_t *mcontext,
-           bool restore_memory, bool app_code_consistent)
+event_thread_init(void *drcontext)
 {
-    DPRINT("Very very bad cat!\n");
-    dr_abort();
+    struct thread_info *tls;
+
+    DPRINT("Starting thread.\n");
+    tls = (struct thread_info *)dr_thread_alloc(drcontext, sizeof(struct thread_info));
+    dr_set_tls_field(drcontext, tls);
+    tls->shadow_count = 0;
+}
+
+static void
+event_thread_exit(void *drcontext)
+{
+    struct thread_info *tls;
+
+    DPRINT("Ending thread.\n");
+    tls = (struct thread_info *)dr_get_tls_field(drcontext);
+    dr_thread_free(drcontext, tls, sizeof(struct thread_info));
 }
 
 static void
 event_exit(void)
 {
-    DPRINT("I am a cat\n");
+    DERR("I am a cat\n");
 }
+
+/***** MAIN *****/
 
 DR_EXPORT void
 dr_client_main(client_id_t id, int argc, const char *argv[])
@@ -431,6 +707,7 @@ dr_client_main(client_id_t id, int argc, const char *argv[])
     dr_register_filter_syscall_event(syscall_filter);
     dr_register_pre_syscall_event(event_pre_syscall);
     dr_register_bb_event(event_bb);
-    dr_register_restore_state_event(event_fail);
+    dr_register_thread_init_event(event_thread_init);
+    dr_register_thread_exit_event(event_thread_exit);
     dr_register_exit_event(event_exit);
 }

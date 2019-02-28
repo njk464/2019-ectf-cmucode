@@ -4,7 +4,7 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_C
-  "/home/ubuntu/dynamorio_bin/plugin/cfi_plugin.c" "/home/ubuntu/dynamorio_bin/plugin/build/CMakeFiles/cfiplugin.dir/cfi_plugin.c.o"
+  "/home/ubuntu/dynamorio_bin/plugin_shadowstack_ship2/cfi_plugin.c" "/home/ubuntu/dynamorio_bin/plugin_shadowstack_ship2/build/CMakeFiles/cfiplugin.dir/cfi_plugin.c.o"
   )
 set(CMAKE_C_COMPILER_ID "GNU")
 
