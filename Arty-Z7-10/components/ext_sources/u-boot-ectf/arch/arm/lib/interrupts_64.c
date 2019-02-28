@@ -27,14 +27,7 @@ int disable_interrupts(void)
 
 void show_regs(struct pt_regs *regs)
 {
-	int i;
-
-	printf("ELR:     %lx\n", regs->elr);
-	printf("LR:      %lx\n", regs->regs[30]);
-	for (i = 0; i < 29; i += 2)
-		printf("x%-2d: %016lx x%-2d: %016lx\n",
-		       i, regs->regs[i], i+1, regs->regs[i+1]);
-	printf("\n");
+    return;
 }
 
 /*
