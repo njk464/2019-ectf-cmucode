@@ -235,7 +235,7 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         } 
 
         if (strncmp(full_name, game_name, game_name_len) != 0){
-            print("Header data and file name do not match.");
+            printf("Header data and file name do not match.");
             return -1;
         }
         start_name = decrypted_header; 
@@ -382,13 +382,13 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
 
         // compare the header to provided name
         char* full_name = (char*) safe_malloc(game_name_len);
-        if(sprintf(full_name, "%s-v%d.%d", game->name, major_version, minor_version) <=0){
+        if(sprintf(full_name, "%s-v%d.%d", name, major_version, minor_version) <=0){
             printf("Game header data corrupted.");
             return -1;
         } 
 
         if (strncmp(full_name, game_name, game_name_len) != 0){
-            print("Header data and file name do not match.");
+            printf("Header data and file name do not match.");
             return -1;
         }
 
