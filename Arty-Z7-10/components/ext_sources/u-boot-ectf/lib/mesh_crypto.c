@@ -160,6 +160,7 @@ int verify_signed(unsigned char* signed_data, unsigned char* verified, unsigned 
  * @return The size of the game unencrypted game binary, -1 on error. 
  */
 loff_t crypto_get_game_header(Game *game, char *game_name){
+    int game_name_len = 32 + 10 + 10 + 3;
     int num_users = 0;
     loff_t unverified_len;
     loff_t verified_len;
@@ -214,20 +215,6 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         parsed_game_name = strsep(&decrypted_header,"\n");
         end_game_name = decrypted_header - 2; // This is -2 because I don't want to include the newline
 
-        int game_name_len = snprintf(NULL, 0, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version) + 1;
-        if (game_name_len <= 0){
-            printf("Corrupted game name value.");
-            return -1;
-        }
-        // compare the header to provided name
-        char* full_name = (char*) safe_malloc(game_name_len);
-        full_name_from_short_name(full_name, row);
-
-        if (strncmp(full_name, game_name, game_name_len) != 0){
-            print("Header data and file name do not match.");
-            return -1;
-        }
-
         // get everything up to the first '.'. That's the major version
         char *temp_pointer = game_version;
         // get after the '.'. That's the minor version
@@ -240,6 +227,17 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         memcpy(game->name, parsed_game_name, end_game_name - parsed_game_name);
         game->name[end_game_name - parsed_game_name] = '\0';
 
+        // compare the header to provided name
+        char* full_name = (char*) safe_malloc(game_name_len);
+        if(sprintf(full_name, "%s-v%d.%d", game->name, game->major_version, game->minor_version) <=0){
+            printf("Game header data corrupted.");
+            return -1;
+        } 
+
+        if (strncmp(full_name, game_name, game_name_len) != 0){
+            print("Header data and file name do not match.");
+            return -1;
+        }
         start_name = decrypted_header; 
         // loop though the header
         while((decrypted_header = strstr(decrypted_header," ")) != NULL ){
@@ -286,6 +284,7 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
  * @return 1 on success, -1 on error. 
  */
 int crypto_get_game(char *game_binary, char *game_name, User* user){
+    int game_name_len = 32 + 10 + 10 + 3;
     int num_users = 0;
     int flag = 0;
     loff_t unverified_len;
@@ -368,14 +367,25 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         parsed_game_name = strsep(&decrypted_header,"\n");
         end_game_name = decrypted_header - 2; // this is -2 because I don't want to include the newline
 
-        int game_name_len = snprintf(NULL, 0, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version) + 1;
-        if (game_name_len <= 0){
-            printf("Corrupted game name value.");
-            return -1;
-        }
+        // get everything up to the first '.'. That's the major version
+        char *temp_pointer = game_version;
+        // get after the '.'. That's the minor version
+        char* major_version_str = strsep(&temp_pointer, ".");
+        char* minor_version_str = strsep(&temp_pointer, "\n");
+
+        int major_version = simple_strtoul(major_version_str, NULL, 10);
+        int minor_version = simple_strtoul(minor_version_str, NULL, 10);
+
+        char * name = safe_malloc((end_game_name - parsed_game_name)+1);
+        memcpy(name, parsed_game_name, end_game_name - parsed_game_name);
+        name[end_game_name - parsed_game_name] = '\0';
+
         // compare the header to provided name
         char* full_name = (char*) safe_malloc(game_name_len);
-        full_name_from_short_name(full_name, row);
+        if(sprintf(full_name, "%s-v%d.%d", game->name, major_version, minor_version) <=0){
+            printf("Game header data corrupted.");
+            return -1;
+        } 
 
         if (strncmp(full_name, game_name, game_name_len) != 0){
             print("Header data and file name do not match.");
