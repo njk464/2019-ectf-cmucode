@@ -307,9 +307,10 @@ int mesh_help(char **args)
 int mesh_shutdown(char **args)
 {
     /* Exit the shell completely */
-    memset(user.name, 0, MAX_USERNAME_LENGTH + 1);
-    memset(user.pin, 0, MAX_PIN_LENGTH + 1);
-    return MESH_SHUTDOWN;
+    char * const reset_argv[3] = {"reset"}; 
+    cmd_tbl_t* reset_tp = find_cmd("reset");
+    reset_tp->cmd(reset_tp, 1, 0, reset_argv);
+    return 0;
 }
 
 /* 
@@ -318,7 +319,7 @@ int mesh_shutdown(char **args)
    shell.
 */
 int mesh_logout(char **args)
-{
+{   
     /* Exit the shell, allow other user to login */
     memset(user.name, 0, MAX_USERNAME_LENGTH + 1);
     memset(user.pin, 0, MAX_PIN_LENGTH + 1);

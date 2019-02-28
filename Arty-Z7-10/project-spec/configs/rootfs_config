@@ -4137,4 +4137,4 @@ CONFIG_wipe=y
 #
 # PetaLinux RootFS Settings
 #
-CONFIG_ROOTFS_ROOT_PASSWD="ectf-cmu-temp-root-passwd"
+# CONFIG_ROOTFS_ROOT_PASSWD="ectf-cmu-temp-root-passwd"
