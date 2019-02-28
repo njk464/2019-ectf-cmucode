@@ -283,25 +283,28 @@ Finally, the script copies any provisioned games onto the SD card.
 
 ### Petalinux Game Loader
 
-In order to play a game, petalinux loads the game binary from a specified location in flash.
-There are 2 main files that contain the code for this process.
-One is the source code for the C program that loads the game from RAM and writes it to flash.
+In order to play a game, petalinux loads the game binary from a specified location in memory.
+There are 3 main files that contain the code for this process.
+One is the source code for the C program that loads the game from RAM and writes it to a random file in memory.
 The second is the startup script that prevents the user from accessing the petalinux shell.
-You may want to change this in your final design.
-As it is now, the game loader is functional, but simple.
+The third is a plugin for DynamorRIO which we use to dynamically instrument the game.
 
 #### main.c
 
-Location: `/ectf-collegiate/MES/Arty-Z7-10/project-spec/meta-user/recipes-apps/mesh-game-loader/files/main.c`
+Location: `/MES/Arty-Z7-10/project-spec/meta-user/recipes-apps/mesh-game-loader/files/main.c`
 
-This file loads the game from flash at location `0x1FC00000`. It first reads the size of the game as a 4 byte integer from `0x1FC00000` then reads this length of bytes at location `0x1FC00040`. It then writes the remaining bytes to a file. This creates a file in petalinux that is an executable binary.
+This file loads the game from flash at location `0x1FC00000`. It first reads the size of the game as a 4 byte integer from `0x1FC00000` then reads this length of bytes at location `0x1FC00040`. It then writes the remaining bytes to a temporary file. This creates a file in petalinux that is an executable binary.
 
 #### startup.sh
-Location: `/ectf-collegiate/MES/Arty-Z7-10/project-spec/meta-user/recipes-apps/mesh-game-loader/files/startup.sh`
+Location: `/MES/Arty-Z7-10/project-spec/meta-user/recipes-apps/mesh-game-loader/files/startup.sh`
 
-This file is specified as a startup script in the `mesh-game-loader/mesh-game-loader.bb` file, therefore it runs when petalinux boots up. It then creates a file for the game to be written, calls mesh-game-loader to write the game binary into the file, gives this file executable permissions, configures the serial device, and then runs the game. After the game executes, the startup script triggers a restart, preventing the user from falling through to the bash prompt.
+This file is specified as a startup script in the `mesh-game-loader/mesh-game-loader.bb` file, therefore it runs when petalinux boots up. It sets full ASLR, and then creates a file for the game to be written, calls mesh-game-loader to write the game binary into the file, gives this file executable permissions, configures the serial device, and then runs the game with DynamroRIO. After the game executes, the startup script triggers a restart, preventing the user from falling through to the bash prompt.
 
-It is important to note that configuring the serial device must be done BEFORE playing the game. As the rules specify, you must have a serial device accessible to the game that is configured at a baud rate of 115200. This is used for debugging from within the game and for automated testing. If the baud rate is not set to 115200, we will not be able to see the serial output from the game and you will not have a valid design.
+#### libcfiplugin.so
+Source code: `/MES/Arty-Z7-10/project-spec/meta-user/recipes-apps/dynamorio/plugin/cfi_plugin.c`
+
+This file is our own plugin for DynamoRIO, which we use for runtime instrumentation of the binary game, which could potentially be vulnerable to attacks. We introduce defenses to reduce the potential attack surface on the given game. This includes implementing a syscall filter, blocking out potentially dangerous syscalls. It also includes an implementation of a shadow stack, which provides protection against memory corruption vulnerabilities.
+
 
 ### U-Boot and MESH Details
 
