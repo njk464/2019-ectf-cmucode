@@ -225,7 +225,7 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         game->minor_version = simple_strtoul(minor_version_str, NULL, 10);
 
         memcpy(game->name, parsed_game_name, end_game_name - parsed_game_name);
-        game->name[end_game_name - parsed_game_name] = '\0';
+        game->name[(end_game_name - parsed_game_name) + 1] = '\0';
 
         // compare the header to provided name
         char* full_name = (char*) safe_malloc(game_name_len);
@@ -378,7 +378,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
 
         char * name = safe_malloc((end_game_name - parsed_game_name)+1);
         memcpy(name, parsed_game_name, end_game_name - parsed_game_name);
-        name[end_game_name - parsed_game_name] = '\0';
+        game->name[(end_game_name - parsed_game_name) + 1] = '\0';
 
         // compare the header to provided name
         char* full_name = (char*) safe_malloc(game_name_len);
