@@ -64,12 +64,12 @@ char *get_salt(char *username){
  * @params version The version number of the game
  * @return void 
  */
-void gen_userkey(char *key, char* name, char* pin, char* game_name, char* version){
-    int MAX_PASSWORD_SIZE = strlen(name) + strlen(pin) + strlen(game_name) + strlen(version) + crypto_pwhash_SALTBYTES ; 
+void gen_userkey(char *key, char* name, char* pin, char* game_name, char* major_version, char* minor_version){
+    int MAX_PASSWORD_SIZE = strlen(name) + strlen(pin) + strlen(game_name) + strlen(major_version) + strlen(minor_version) + crypto_pwhash_SALTBYTES + 1; 
     char password[MAX_PASSWORD_SIZE];
     memset(key, 0, crypto_hash_sha256_BYTES);
     // combine strings then memcpy non-standard characters from the salt
-    sprintf(password, "%s%s%s%s", name, pin, game_name, version);
+    sprintf(password, "%s%s%s%s.%s", name, pin, game_name, major_version, minor_version);
     memcpy(password + MAX_PASSWORD_SIZE - crypto_pwhash_SALTBYTES, get_salt(name), crypto_pwhash_SALTBYTES);
     crypto_hash_sha256((unsigned char*) key, 
                                  (const unsigned char *) password, 
@@ -160,6 +160,7 @@ int verify_signed(unsigned char* signed_data, unsigned char* verified, unsigned 
  * @return The size of the game unencrypted game binary, -1 on error. 
  */
 loff_t crypto_get_game_header(Game *game, char *game_name){
+    int game_name_len = 32 + 10 + 10 + 3;
     int num_users = 0;
     loff_t unverified_len;
     loff_t verified_len;
@@ -212,7 +213,7 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         game_version = strsep(&decrypted_header,"\n");
         strsep(&decrypted_header,":");
         parsed_game_name = strsep(&decrypted_header,"\n");
-        end_game_name = decrypted_header - 2; // This is -2 because I don't want to include the newline
+        end_game_name = decrypted_header - 1; // This is -2 because I don't want to include the newline
 
         // get everything up to the first '.'. That's the major version
         char *temp_pointer = game_version;
@@ -226,6 +227,16 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         memcpy(game->name, parsed_game_name, end_game_name - parsed_game_name);
         game->name[end_game_name - parsed_game_name] = '\0';
 
+        // compare the header to provided name
+        char* full_name = (char*) safe_malloc(game_name_len);
+        if(sprintf(full_name, "%s-v%d.%d", game->name, game->major_version, game->minor_version) <=0){
+            printf("Game header data corrupted.");
+            return -1;
+        } 
+        if (strncmp(full_name, game_name, game_name_len) != 0){
+            printf("Header data and file name do not match.");
+            return -1;
+        }
         start_name = decrypted_header; 
         // loop though the header
         while((decrypted_header = strstr(decrypted_header," ")) != NULL ){
@@ -272,6 +283,7 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
  * @return 1 on success, -1 on error. 
  */
 int crypto_get_game(char *game_binary, char *game_name, User* user){
+    int game_name_len = 32 + 10 + 10 + 3;
     int num_users = 0;
     int flag = 0;
     loff_t unverified_len;
@@ -352,7 +364,31 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         game_version = strsep(&decrypted_header,"\n");
         strsep(&decrypted_header,":");
         parsed_game_name = strsep(&decrypted_header,"\n");
-        end_game_name = decrypted_header - 2; // this is -2 because I don't want to include the newline
+        end_game_name = decrypted_header - 1; 
+
+        // get everything up to the first '.'. That's the major version
+        char *temp_pointer = game_version;
+        // get after the '.'. That's the minor version
+        char* major_version_str = strsep(&temp_pointer, ".");
+        char* minor_version_str = strsep(&temp_pointer, "\n");
+
+        int major_version = simple_strtoul(major_version_str, NULL, 10);
+        int minor_version = simple_strtoul(minor_version_str, NULL, 10);
+
+        char * name = safe_malloc((end_game_name - parsed_game_name)+1);
+        memcpy(name, parsed_game_name, end_game_name - parsed_game_name);
+        name[end_game_name - parsed_game_name] = '\0';
+
+        // compare the header to provided name
+        char* full_name = (char*) safe_malloc(game_name_len);
+        if(sprintf(full_name, "%s-v%s.%s", name, major_version_str, minor_version_str) <=0){
+            printf("Game header data corrupted.");
+            return -1;
+        } 
+        if (strncmp(full_name, game_name, game_name_len) != 0){
+            printf("Header data and file name do not match.");
+            return -1;
+        }
 
         start_name = decrypted_header; 
         // loop though the header ensure extract encrypted game key + nonce
@@ -383,7 +419,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         // check for found user
         if(flag == 1){
             // get the user key
-            gen_userkey(user_key, user->name, user->pin, parsed_game_name, game_version);
+            gen_userkey(user_key, user->name, user->pin, parsed_game_name, major_version_str, minor_version_str);
 
              // decrypt the gamekeynonce
             if(decrypt(user_key, user_nonce, encrypted_gamekeynonce, encrypted_gamekeynonce_len, gamekey_nonce) == -1){

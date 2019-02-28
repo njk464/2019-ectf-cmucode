@@ -88,7 +88,7 @@ def provision_game(line, user_array, header_key, sk):
     # 5. Match the group (major.minor)
     # TODO: Evaluate this as a possible entry point
 
-    reg = r'^\s*([\w\/\-.\_]+)\s+([\w\-.\_]+)\s+(\d+\.\d+|\d+)((?:\s+\w+)+)'
+    reg = r'^\s*([\w\/\-.\_]+)\s+([\w\-.\_]+)\s+(\d+\.\d+)((?:\s+\w+)+)'
     m = re.match(reg, line)
     if not m:
         return
