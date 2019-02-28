@@ -421,6 +421,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         // check for found user
         if(flag == 1){
             // get the user key
+            printf("Parsed Game Name: |%s|\n", parsed_game_name);
             gen_userkey(user_key, user->name, user->pin, parsed_game_name, game_version);
 
              // decrypt the gamekeynonce
