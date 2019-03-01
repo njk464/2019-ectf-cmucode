@@ -1,18 +1,20 @@
+![ROP it like it's hot](https://github.com/njk464/2019-ectf-cmucode/raw/master/ROP_logo.png "ROP it like it's hot")
+
 # 2019 Collegiate eCTF ROP it like it's hot code
 
 This repository contains a gaming system for CMU's team `ROP it like it's hot` used for MITRE's 2019 [Embedded System CTF](http://mitrecyberacademy.org/competitions/embedded/). 
-The example reference system was based off of [this repository](https://github.com/Digilent/Petalinux-Arty-Z7-10).
+This system was based off of the insecure reference design in [this repository](https://github.com/mitre-cyber-academy/2019-ectf-insecure-example) which was based off of [this other repository](https://github.com/Digilent/Petalinux-Arty-Z7-10).
 
 ## Getting Started
 
 ### Setting up the Development Environment
 
-In order to manage dependencies and allow for easier cross-platform development, a VM provisioned by [Vagrant](https://vagrantup.com) will be used for building and provisioning the design.
+Setting up an environment follows similarly from the reference design. In order to manage dependencies and allow for easier cross-platform development, a VM provisioned by [Vagrant](https://vagrantup.com) will be used for building and provisioning the design.
 You may develop in another environment, however the steps outlined in the build process **must** produce a working boot image.
 
 **On the Arty Z7 board, move jumper JP4 to the two pins labeled 'SD'**
 
-After you have finished initializing the development environment (see the [2019-ectf-vagrant repo](https://github.com/mitre-cyber-academy/2019-ectf-vagrant)), this repository will be cloned to `/home/vagrant/MES` in the virtual machine.
+After you have finished initializing the development environment in the vagrant environment provided by MITRE, this repository will be cloned to `/home/vagrant/MES` in the virtual machine.
 Please refer to the vagrant repository for further setup instructions.
 
 ## 1. Overview
@@ -24,6 +26,7 @@ The reference design is divided into the following three top-level directories c
 		- Kernel
 		- FileSystem
 			- Mesh Game Loader
+			- DynamoRIO + CFI Plugin
 		- Device Tree
 	/Arty-Z7-10-hardware ~ Submodule to the [2019-ectf-hardware repo](https://github.com/mitre-cyber-academy/2019-ectf-hardware) which contains the Vivado Hardware Project
 		- Hardware
@@ -33,6 +36,25 @@ The reference design is divided into the following three top-level directories c
 		- packageSystem.py: used to create the boot image
 		- deploySystem.py: used to partition and format the SD as well as deploy the boot image
 
+Our overall defense is centered around simple, good cryptographic primitives, good coding practices and the principle of least privilege to ensure the security of our system. To that end, we performed the following:
+
+### U-Boot
+1) Removed unnecessary functionality, e.g. Ethernet initialization and other unnecessary bloat
+2) Use of secure functions rather than insecure U-boot functionality
+
+### Petalinux
+1) Hardened and removed unnecessary processes and components.
+2) Lowered privileges when running game.
+3) Dynamically instrument game with Control Flow Integrity (CFI) to prevent exploits
+
+### Games
+1) Encrypted xSalsa and Signed with ED25519 to prevent loss of confidentiality and integrity.
+2) Keys generated with randomness and depends on user credentials - without the right user credentials, the game won't decrypt nor run!
+
+### Login and User Metadata
+1) Passcodes stored as bcrypt keyed digests.
+2) 5 second backoff for incorrect passcode attempts to prevent brute force
+3) Flash metadata stored uses authenticated encryption to prevent modification
 
 ## 2. Provisioning a System
 
@@ -132,7 +154,7 @@ the `sstate-cache` out of `build` temporarily can save you time when rebuilding.
 
 ## provisionGames.py
 
-The `provisionGames.py` must read a games file which is in a MITRE-defined format.
+The `provisionGames.py` reads a games file which is in a MITRE-defined format.
 The file contains the metadata about the games which must be provisioned into the system.
 
 The format is as follows:
@@ -201,15 +223,6 @@ The `deploySystem.py` script:
 - if specified, copy the `MES.bin` image onto the FAT partition of the SD card (see below for more clarification)
 - copy games in the `games` folder onto the Ext4 partition of the SD card
 
-MITRE will be providing each team with a `BOOT.bin` file that should be placed into `files/BOOT.bin`.
-This path is expected to be provided as the `boot_path` argument, and the generated `MES.bin` is expected to be passed as the `mes_path` argument.
-In the event that your team decided to purchase additional hardware, the provided `BOOT.bin` will **NOT** work.
-However, you can provided `MES.bin` as the `boot_path` argument and not specify a `mes_path`.
-Note that this flexibility is **not** required for the design of the `deploySystem.py` script.
-
-If you are using this build process, the games will be located in `files/generated/games`.
-The `BOOT.bin` will be located at `files/BOOT.bin` (note that you will have to put this here!) and the `MES.bin` will be located at `files/generated/MES.bin`.
-
 **WARNING: the following will format whatever device is specified. Ensure that you are specifying the SD card**
 The SD card will be of size approximately 8 GB.
 
@@ -228,7 +241,7 @@ For example, for the reference implementation, the system can be deployed with t
 
 ## Summary
 
-In summary, the organizers will build your system using the following procedure:
+In summary, you can build your system using the following procedure:
 
 	1. create a `Users.txt` file
     2. create a `Default.txt` file
@@ -242,12 +255,18 @@ In summary, the organizers will build your system using the following procedure:
 	7. boot
 
 
-## 3. Reference Design Implementation Details
+## 3. Design Implementation Details
+
+The following diagram summarizes our design of the system:
+
+![rop it like it's hot diagram](https://github.com/njk464/2019-ectf-cmucode/blob/master/eCTF_diagram.png "rop it like it's hot diagram")
 
 ### provisionSystem.py
 
 During the system provisioning process, `provisionSystem.py` transforms the `Users.txt` and `default_games.txt` file into C header files, which are included in the MITRE Entertainment SHell.
-This provides access to the users and encrypted hashs of the pins which are allowed to login to the system, as well as default game requirements.
+
+This provides access to the users and encrypted hashes of the pins which are allowed to login to the system, as well as default game requirements.
+
 This script also generates a `bif` file to specify boot information, as well as populates the  `FactorySecrets` file.
 The `provisionSystem.py` script builds U-Boot, the Kernel, the Device Tree, and the FileSystem (INITRAMFS).
 Each of these components is described in greater detail below.
@@ -270,6 +289,7 @@ During the game provisioning process, `provisionGames.py` takes each entry in `G
 	}
 	<encryptedGameBinary> <signatureOfFile>
 
+At this point, it generates the game keys, user keys, and header keys using the formulas given in the above diagram. The games will then be encrypted and signed into the format specified above.
 
 ### packageSystem.py
 
@@ -458,9 +478,33 @@ Linux is responsible for reading the reserved memory region and launching the ga
 
 _Arty-Z7-10/project-spec/meta-user/recipes-apps/mesh-game-loader_
 
+After the game is loaded, the game is run using a dynamic instrumentation engine - DynamoRIO - with CFI enforced. This is to prevent vulnerabilities in the game from allowing users to escape to a shell on the system. More information on the CFI can be found here:
+
+_Arty-Z7-10/project-spec/meta-user/recipes-apps/dynamorio_
+
 ### FileSystem
 
-## Building the Reference Design Instructions
+The filesystem is stored in DDR3 RAM, which offers sufficient protection Cold Boot Attacks.
+
+### Additional Files
+
+In order to implement the cryptography we added a number of files to the u-boot dependencies. These were small portions of larger open source implementations that we ported manually onto the board. These files are:
+
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/lib/sodium.c
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/include/sodium.h
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/lib/bcrypt.c
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/include/bcrypt.h
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/lib/blf.c
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/include/blf.h
+
+These were pulled from [Libsodium](https://libsodium.gitbook.io/doc/) and [Bcrypt and Blowfish](http://bcrypt.sourceforge.net/)  with only the portions that were relevant to the project, with slight modifications. These are used to make the provided `mesh.c` more robust through both encryption in `mesh.c` and the additional file mesh_crypto.c. The implementation can be seen at:
+
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/common/mesh.c
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/include/mesh.c
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/lib/mesh_crypto.c
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/include/mesh_crypto.c
+
+## Building the Design Instructions
 
 In summary, to build the reference design for the first time, follow the steps below:
 1. Ensure that all steps to provision the development environment were completed as listed in the **Provision Instructions** section in the 2019-ectf-vagrant README
@@ -517,3 +561,4 @@ https://www.xilinx.com/support/documentation/sw_manuals/xilinx2017_1/ug1144-peta
 
 UG1156: Petalinux Tools Documentation Workflow Tutorial:
 https://www.xilinx.com/support/documentation/sw_manuals/xilinx2017_3/ug1156-petalinux-tools-workflow-tutorial.pdf
+

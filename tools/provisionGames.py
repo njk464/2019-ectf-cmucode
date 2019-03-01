@@ -86,7 +86,6 @@ def provision_game(line, user_array, header_key, sk):
     # 3. Match the game name and capture it
     # 4. Skip over whitespace
     # 5. Match the group (major.minor)
-    # TODO: Evaluate this as a possible entry point
 
     reg = r'^\s*([\w\/\-.\_]+)\s+([\w\-.\_]+)\s+(\d+\.\d+)((?:\s+\w+)+)'
     m = re.match(reg, line)
@@ -193,9 +192,13 @@ def main():
     subprocess.check_call("mkdir -p %s" % (gen_path), shell=True)
 
     print("Provision Games...")
-
+    count = 0
     # Provision each line in the games file
     for line in f_games:
+        count = count + 1
+        if count > 128:
+            print("You have specified more games than the system can handle.")
+            exit()
         provision_game(line, user_array, header_key, sk)
 
     print("Done Provision Games")

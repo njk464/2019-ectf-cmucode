@@ -8,8 +8,14 @@
 #define MAX_USERNAME_LENGTH 15
 #define MAX_PIN_LENGTH 8
 #define MAX_GAME_LENGTH 31
+#define MAX_GAME_SIZE 4*1024*1024
+#define MAX_INT_STR_LENGTH (sizeof(int) * 2 + 3)
+#define MAX_VERSION_LENGTH MAX_INT_STR_LENGTH
+#define BASE 10
 #define MAX_NUM_USERS 32
 #define MAX_GAMES 128
+#define MAX_INT_LEN 10
+#define MAX_BUILTIN_STR_LEN 9
 
 #define MESH_SENTINEL_LOCATION 0x00000040
 #define MESH_SENTINEL_VALUE 0xDEADBEEF
@@ -18,7 +24,6 @@
 
 #define MESH_TABLE_UNINSTALLED 0x00
 #define MESH_TABLE_INSTALLED 0x01
-#define MESH_TABLE_END 0xff
 
 #define MAX_LOGIN_ATTEMPTS 2
 #define LOGIN_TIMEOUT 5000 // 5-seconds
@@ -28,6 +33,20 @@
 // on boundaries of size 64K
 #define FLASH_PAGE_SIZE 65536
 
+#define MESH_TOK_BUFSIZE 64
+#define MESH_TOK_DELIM " \t\r\n\a"
+#define MESH_RL_BUFSIZE 1024
+#define MESH_SHUTDOWN -2
+
+// INSTALL ERROR CODES
+#define INSTALL_INVALID_LENGTH 2
+#define INSTALL_NO_GAME_EXISTS 3
+#define INSTALL_USER_NOT_ALLOWED 4
+#define INSTALL_DOWNGRADE 5
+#define INSTALL_INSTALLED 6
+#define INSTALL_LIMIT_REACHED 7
+#define INSTALL_INVALID_SIGNATURE 8
+#define INSTALL_UNKNOWN_ERROR -1
 
 /**
  * @brief struct used to store the username and pin
@@ -80,10 +99,11 @@ char **mesh_split_line(char *line) ;
 char* mesh_input(char* prompt);
 int mesh_valid_install(char *game_name);
 void ptr_to_string(void* ptr, char* buf);
-void full_name_from_short_name(char* full_name, struct games_tbl_row* row);
+void full_name_from_short_name(char* full_name, struct games_tbl_row* row, size_t len);
 void *safe_malloc(size_t size);
 void *safe_calloc(size_t nitems, size_t size);
 void *safe_realloc(void *ptr, size_t size);
+void safe_free(void** ptr, size_t size);
 void mesh_get_install_table(void);
 void mesh_write_install_table(void);
 
