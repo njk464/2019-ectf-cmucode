@@ -10,6 +10,7 @@
 #define MAX_GAME_LENGTH 31
 #define MAX_INT_STR_LENGTH (sizeof(int) * 2 + 3)
 #define MAX_VERSION_LENGTH MAX_INT_STR_LENGTH
+#define BASE 10
 #define MAX_NUM_USERS 32
 #define MAX_GAMES 128
 #define MAX_INT_LEN 10
@@ -101,7 +102,7 @@ void full_name_from_short_name(char* full_name, struct games_tbl_row* row, size_
 void *safe_malloc(size_t size);
 void *safe_calloc(size_t nitems, size_t size);
 void *safe_realloc(void *ptr, size_t size);
-void safe_free(void* ptr, size_t size);
+void safe_free(void** ptr, size_t size);
 void mesh_get_install_table(void);
 void mesh_write_install_table(void);
 
