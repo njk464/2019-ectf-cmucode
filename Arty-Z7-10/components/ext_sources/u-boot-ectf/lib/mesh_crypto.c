@@ -160,7 +160,7 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
     verified_ciphertext = safe_malloc(verified_len);
 
     // read the game into a buffer
-    signed_ciphertext = (char*) safe_malloc(unverified_len); //TODO: Check length (+1)
+    signed_ciphertext = (char*) safe_malloc(unverified_len);
     mesh_read_ext4(game_name, signed_ciphertext, unverified_len);
 
     if(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0){

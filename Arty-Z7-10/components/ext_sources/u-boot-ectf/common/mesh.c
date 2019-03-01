@@ -929,7 +929,7 @@ loff_t mesh_size_ext4(char *fname){
  * @brief reads size bytes into buf from a file on a ext4 partition
  * 
  * @param fname name of the file being read from
- * @param buf pointer to the buffer taht we are reading data to
+ * @param buf pointer to the buffer that we are reading data to
  * @param size max number of bytes to read
  * @return the number of bytes read. -1 on error
  */
