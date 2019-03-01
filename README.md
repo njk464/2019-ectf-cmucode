@@ -499,7 +499,7 @@ In order to implement the cryptography we added a number of files to the u-boot 
 
 These were pulled from [Libsodium](https://libsodium.gitbook.io/doc/) and [Bcrypt and Blowfish](http://bcrypt.sourceforge.net/)  with only the portions that were relevant to the project, with slight modifications. These are used to make the provided `mesh.c` more robust through both encryption in `mesh.c` and the additional file mesh_crypto.c. The implementation can be seen at:
 
-	Arty-Z7-10/components/ext_sources/u-boot-ectf/lib/mesh.c
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/common/mesh.c
 	Arty-Z7-10/components/ext_sources/u-boot-ectf/include/mesh.c
 	Arty-Z7-10/components/ext_sources/u-boot-ectf/lib/mesh_crypto.c
 	Arty-Z7-10/components/ext_sources/u-boot-ectf/include/mesh_crypto.c
