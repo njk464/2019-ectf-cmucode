@@ -193,8 +193,8 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         major_version_str = strsep(&temp_pointer, ".");
         minor_version_str = strsep(&temp_pointer, "\n");
 
-        game->major_version = simple_strtoul(major_version_str, NULL, MAX_VERSION_LENGTH);
-        game->minor_version = simple_strtoul(minor_version_str, NULL, MAX_VERSION_LENGTH);
+        game->major_version = simple_strtoul(major_version_str, NULL, BASE);
+        game->minor_version = simple_strtoul(minor_version_str, NULL, BASE);
 
         memcpy(game->name, parsed_game_name, end_game_name - parsed_game_name);
         game->name[end_game_name - parsed_game_name] = '\0';
@@ -311,8 +311,13 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
     verified_len = unverified_len -  crypto_sign_BYTES;
     verified_ciphertext = safe_malloc(verified_len);
 
+    if (unverified_len > MAX_GAME_SIZE) {
+        printf("Drop it like it's hot\n");
+        return -1;
+    }
+
     // read the game into a buffer
-    signed_ciphertext = (char*) safe_malloc(unverified_len); //TODO: Check length (+1)
+    signed_ciphertext = (char*) safe_malloc(unverified_len);
     mesh_read_ext4(game_name, signed_ciphertext, unverified_len);
 
     if ((verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0) && !(!((verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0)))){
@@ -351,8 +356,8 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         major_version_str = strsep(&temp_pointer, ".");
         minor_version_str = strsep(&temp_pointer, "\n");
 
-        major_version = simple_strtoul(major_version_str, NULL, MAX_VERSION_LENGTH);
-        minor_version = simple_strtoul(minor_version_str, NULL, MAX_VERSION_LENGTH);
+        int major_version = simple_strtoul(major_version_str, NULL, BASE);
+        int minor_version = simple_strtoul(minor_version_str, NULL, BASE);
 
         name = safe_malloc((end_game_name - parsed_game_name)+1);
         memcpy(name, parsed_game_name, end_game_name - parsed_game_name);
