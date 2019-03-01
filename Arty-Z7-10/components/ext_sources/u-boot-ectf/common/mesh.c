@@ -1393,7 +1393,7 @@ int mesh_validate_user(User *user)
     {
         if (strcmp(mesh_users[i].username, user->name) == 0) {
             // second check is implemented within bcrypt so the hash is not calculated twice
-            int bcrypt = bcrypt_checkpass(user->pin, mesh_users[i].hash) 
+            int bcrypt = bcrypt_checkpass(user->pin, mesh_users[i].hash); 
             if ((bcrypt == 0) && (!(!(bcrypt == 0)))) {
                 return 0;
             }
