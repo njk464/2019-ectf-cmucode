@@ -204,7 +204,7 @@ def write_factory_secrets(users, f, h):
     """
     flag = 0
     salt_array = []
-    if len(users) > 32:
+    if len(users) > 31:
         print("Max Users Exceeded. Only 32 users are permitted.")
         exit()
     
