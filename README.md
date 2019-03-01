@@ -486,7 +486,25 @@ _Arty-Z7-10/project-spec/meta-user/recipes-apps/dynamorio_
 
 The filesystem is stored in DDR3 RAM, which offers sufficient protection Cold Boot Attacks.
 
-## Building the Reference Design Instructions
+### Additional Files
+
+In order to implement the cryptography we added a number of files to the u-boot dependencies. These were small portions of larger open source implementations that we ported manually onto the board. These files are:
+
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/lib/sodium.c
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/include/sodium.h
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/lib/bcrypt.c
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/include/bcrypt.h
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/lib/blf.c
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/include/blf.h
+
+These were pulled from [Libsodium](https://libsodium.gitbook.io/doc/) and [Bcrypt and Blowfish](http://bcrypt.sourceforge.net/)  with only the portions that were relevant to the project, with slight modifications. These are used to make the provided `mesh.c` more robust through both encryption in `mesh.c` and the additional file mesh_crypto.c. The implementation can be seen at:
+
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/lib/mesh.c
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/include/mesh.c
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/lib/mesh_crypto.c
+	Arty-Z7-10/components/ext_sources/u-boot-ectf/include/mesh_crypto.c
+
+## Building the Design Instructions
 
 In summary, to build the reference design for the first time, follow the steps below:
 1. Ensure that all steps to provision the development environment were completed as listed in the **Provision Instructions** section in the 2019-ectf-vagrant README
