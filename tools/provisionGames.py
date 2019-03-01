@@ -86,7 +86,6 @@ def provision_game(line, user_array, header_key, sk):
     # 3. Match the game name and capture it
     # 4. Skip over whitespace
     # 5. Match the group (major.minor)
-    # TODO: Evaluate this as a possible entry point
 
     reg = r'^\s*([\w\/\-.\_]+)\s+([\w\-.\_]+)\s+(\d+\.\d+)((?:\s+\w+)+)'
     m = re.match(reg, line)
