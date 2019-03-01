@@ -193,9 +193,13 @@ def main():
     subprocess.check_call("mkdir -p %s" % (gen_path), shell=True)
 
     print("Provision Games...")
-
+    count = 0
     # Provision each line in the games file
     for line in f_games:
+        count = count + 1
+        if count > 128:
+            print("You have specified more games than the system can handle.")
+            exit()
         provision_game(line, user_array, header_key, sk)
 
     print("Done Provision Games")
