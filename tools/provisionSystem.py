@@ -7,6 +7,8 @@ import argparse
 import base64
 import pysodium
 import bcrypt
+import fileinput
+import uuid
 
 # Path to the mesh_users header file
 mesh_users_fn = os.environ["ECTF_UBOOT"] + "/include/mesh_users.h"
@@ -22,6 +24,10 @@ factory_secrets_fn = "FactorySecrets.txt"
 secret_header_fn = os.environ["ECTF_UBOOT"] + "/include/secret.h"
 # number of rounds bcrypt uses
 bcrypt_rounds=10
+# rootfs config path
+rootfs_config_path = "/home/vagrant/MES/Arty-Z7-10/project-spec/configs/rootfs_config"
+# rootfs config passwd
+rootfs_config_passwd = "CONFIG_ROOTFS_ROOT_PASSWD"
 
 def gen_key_nonce():
     key = pysodium.randombytes(pysodium.crypto_secretbox_KEYBYTES)
@@ -290,6 +296,15 @@ static char sign_public_key[] = {"""
 
     h.write(s)
 
+def update_rootfs_passwd():
+    # update the root passwd
+    with fileinput.FileInput(rootfs_config_path, inplace=True) as filename:
+        for line in filename:
+            if rootfs_config_passwd in line:
+                print(rootfs_config_passwd + "=\"" + uuid.uuid1().hex + "\"", end='')
+            else:
+                print(line, end='')
+
 def main():
     # Argument parsing
     parser = argparse.ArgumentParser()
@@ -377,7 +392,9 @@ def main():
     f_factory_secrets.close()
     f_secret_header.close()
     print("Generated FactorySecrets file: %s\nGenerated SecretHeader file: %s" % (os.path.join(gen_path, factory_secrets_fn), secret_header_fn))
-    
+   
+    update_rootfs_passwd()
+
     # build MES.bin # Doesn't actually create the file? Makes that in package
     build_images()
 
