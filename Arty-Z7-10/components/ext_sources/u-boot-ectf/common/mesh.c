@@ -929,23 +929,25 @@ loff_t mesh_size_ext4(char *fname){
  * @brief reads size bytes into buf from a file on a ext4 partition
  * 
  * @param fname name of the file being read from
- * @param buf pointer to the buffer taht we are reading data to
+ * @param buf pointer to the buffer that we are reading data to
  * @param size max number of bytes to read
  * @return the number of bytes read. -1 on error
  */
 loff_t mesh_read_ext4(char *fname, char*buf, loff_t size){
     loff_t actually_read;
+    
 
     if(fs_set_blk_dev("mmc", "0:2", FS_TYPE_EXT) < 0){
         return -1;
     }
 
-    ext4_read_file(fname, buf, 0, size, &actually_read);
+    if(ext4_read_file(fname, buf, 0, size, &actually_read) < 0) {
+        return -1;
+    }
 
     ext4fs_close();
 
     return actually_read;
-
 }
 
 /******************************************************************************/
