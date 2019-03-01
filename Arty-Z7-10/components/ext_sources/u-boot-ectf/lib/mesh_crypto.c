@@ -11,7 +11,7 @@
 char *get_salt(char *username){
     unsigned int i;
     for(i = 0; i < MAX_NUM_USERS; i++){
-        if(strcmp(username, users[i]) == 0) {    
+        if(strncmp(username, users[i], MAX_USERNAME_LENGTH) == 0) {    
             return salt[i];
         }
     }
@@ -29,11 +29,11 @@ char *get_salt(char *username){
  * @return void 
  */
 void gen_userkey(char *key, char* name, char* pin, char* game_name, char* major_version, char* minor_version){
-    int MAX_PASSWORD_SIZE = strlen(name) + strlen(pin) + strlen(game_name) + strlen(major_version) + strlen(minor_version) + crypto_pwhash_SALTBYTES + 1; 
+    int MAX_PASSWORD_SIZE = strnlen(name, MAX_USERNAME_LENGTH) + strnlen(pin, MAX_PIN_LENGTH) + strnlen(game_name, MAX_GAME_LENGTH) + strnlen(major_version, MAX_INT_LEN) + strnlen(minor_version, MAX_INT_LEN) + crypto_pwhash_SALTBYTES + 1; 
     char password[MAX_PASSWORD_SIZE];
     memset(key, 0, crypto_hash_sha256_BYTES);
     // combine strings then memcpy non-standard characters from the salt
-    if (sprintf(password, "%s%s%s%s.%s", name, pin, game_name, major_version, minor_version) < 0) {
+    if (snprintf(password, MAX_PASSWORD_SIZE - crypto_pwhash_SALTBYTES,"%s%s%s%s.%s", name, pin, game_name, major_version, minor_version) < 0) {
         mesh_shutdown(NULL);
     }
     memcpy(password + MAX_PASSWORD_SIZE - crypto_pwhash_SALTBYTES, get_salt(name), crypto_pwhash_SALTBYTES);
@@ -372,7 +372,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
             decrypted_header++; // bypass space
             memset(test_name, 0, MAX_USERNAME_LENGTH);
             memcpy(test_name, start_name, end_name - start_name);
-            if(strcmp(test_name, user->name) == 0){
+            if(strncmp(test_name, user->name, MAX_USERNAME_LENGTH) == 0){
                 memcpy(encrypted_gamekeynonce, decrypted_header, encrypted_gamekeynonce_len);
                 memcpy(user_nonce, decrypted_header + encrypted_gamekeynonce_len, crypto_secretbox_NONCEBYTES);
                 flag = 1;

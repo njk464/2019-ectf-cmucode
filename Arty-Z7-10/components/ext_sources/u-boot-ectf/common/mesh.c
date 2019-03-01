@@ -365,7 +365,7 @@ int mesh_list(char **args)
     {
         row = &installed_games[index];
         // print the game if it is found.
-        if (strcmp(row->user_name, user.name) == 0 && row->install_flag == MESH_TABLE_INSTALLED)
+        if (strncmp(row->user_name, user.name, MAX_USERNAME_LENGTH) == 0 && row->install_flag == MESH_TABLE_INSTALLED)
             printf("%s-v%d.%d\n", row->game_name, row->major_version, row->minor_version);
     }
 
@@ -411,7 +411,7 @@ int mesh_play(char **args)
     int casted_size = (int) size;
     // writes 11 byte size string (0x########) to 0x1fc00000 
     char *size_str = (char *)safe_malloc(MAX_INT_STR_LENGTH);
-    if (sprintf(size_str, "0x%x", (int) casted_size) < 0) {
+    if (snprintf(size_str, MAX_INT_STR_LENGTH,"0x%x", (int) casted_size) < 0) {
         mesh_shutdown(NULL);
     }
     char * const mw_argv[3] = { "mw.l", "0x1fc00000", size_str };
@@ -419,7 +419,7 @@ int mesh_play(char **args)
     mem_write_tp->cmd(mem_write_tp, 0, 3, mw_argv);
 
     char *from_str = (char *)safe_malloc(MAX_INT_STR_LENGTH);
-    if (sprintf(from_str, "0x%p", (void *) game_binary) < 0) {
+    if (snprintf(from_str, MAX_INT_STR_LENGTH, "0x%p", (void *) game_binary) < 0) {
         mesh_shutdown(NULL);
     }
     
@@ -512,8 +512,8 @@ int mesh_install(char **args)
     // look for the game in either a lower version or uninstalled
     for (; index < installed_games_size; index++) {
         next = &installed_games[index];
-        if (strcmp(next->game_name, row.game_name) == 0 &&
-            strcmp(next->user_name, row.user_name) == 0)
+        if (strncmp(next->game_name, row.game_name, MAX_GAME_LENGTH) == 0 &&
+            strncmp(next->user_name, row.user_name, MAX_USERNAME_LENGTH) == 0)
         {
             if (next->major_version < row.major_version ||
                 (next->major_version == row.major_version && 
@@ -570,10 +570,10 @@ int mesh_uninstall(char **args)
         malloced_size = snprintf(NULL, 0, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version) + 1;      
         if (malloced_size > 0) {
             char* full_name = (char*) safe_malloc(malloced_size);
-            full_name_from_short_name(full_name, row);
+            full_name_from_short_name(full_name, row, malloced_size);
 
-            if (strcmp(row->user_name, user.name) == 0 &&
-                strcmp(full_name, args[1]) == 0 &&
+            if (strncmp(row->user_name, user.name, MAX_USERNAME_LENGTH) == 0 &&
+                strncmp(full_name, args[1], malloced_size) == 0 &&
                 row->install_flag == MESH_TABLE_INSTALLED)
             {
                 row->install_flag = MESH_TABLE_UNINSTALLED;
@@ -802,7 +802,7 @@ int mesh_ls_iterate_dir(struct ext2fs_node *dir, char *fname)
             }
 
             if (fname != NULL) {
-                if (type == FILETYPE_REG && strcmp(filename, fname) == 0) {
+                if (type == FILETYPE_REG && strncmp(filename, fname, dirent.namelen + 1) == 0) {
                     return 1;
                 }
             } else {
@@ -1022,9 +1022,9 @@ void safe_free(void* ptr, size_t size){
  * @param full_name buffer to store the full name
  * @param row install record used to grab the game name, major version, and minor version
  */
-void full_name_from_short_name(char* full_name, struct games_tbl_row* row)
-{
-    if (sprintf(full_name, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version)  < 0) {
+void full_name_from_short_name(char* full_name, struct games_tbl_row* row, size_t len) {
+    if (snprintf(full_name, len,"%s-v%d.%d", row->game_name, row->major_version, row->minor_version)  < 0) 
+    {
         mesh_shutdown(NULL);
     }
 }
@@ -1050,11 +1050,11 @@ int mesh_game_installed(char *game_name){
         malloced_size = snprintf(NULL, 0, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version) + 1;      
         if (malloced_size > 0){
             char* full_name = (char*) safe_malloc(malloced_size);
-            full_name_from_short_name(full_name, row);
+            full_name_from_short_name(full_name, row, malloced_size);
 
             // check if game is installed and if it is for the specified user.
-            if (strcmp(game_name, full_name) == 0 &&
-                strcmp(user.name, row->user_name) == 0 &&
+            if (strncmp(game_name, full_name, MAX_GAME_LENGTH) == 0 &&
+                strncmp(user.name, row->user_name, MAX_USERNAME_LENGTH) == 0 &&
                 row->install_flag == MESH_TABLE_INSTALLED)
             {
                 safe_free(full_name, malloced_size);
@@ -1129,7 +1129,7 @@ int mesh_game_exists(char *game_name)
 int mesh_check_user(Game *game)
 {
     for (int i=0; i<game->num_users; i++){
-        if (strcmp(game->users[i], user.name) == 0){
+        if (strncmp(game->users[i], user.name, MAX_USERNAME_LENGTH) == 0){
             return 1;
         }
     }
@@ -1157,7 +1157,7 @@ int mesh_check_downgrade(char *game_name, unsigned int major_version, unsigned i
     {
         row = &installed_games[index];
         // Ignore anyone that isn't the current user
-        if (strcmp(user.name, row->user_name) != 0)
+        if (strncmp(user.name, row->user_name, MAX_USERNAME_LENGTH) != 0)
             continue;
 
         // ignore it if it doesn't have the same game name
@@ -1165,7 +1165,7 @@ int mesh_check_downgrade(char *game_name, unsigned int major_version, unsigned i
         char short_game_name[MAX_GAME_LENGTH + 1] = "";
         strncpy(short_game_name, game_name, MAX_GAME_LENGTH);
         strtok(short_game_name, "-");
-        if (strcmp(short_game_name, row->game_name) != 0)
+        if (strncmp(short_game_name, row->game_name, MAX_GAME_LENGTH) != 0)
             continue;
 
         // Fail if the major version of the new game is less than the currently
@@ -1321,7 +1321,7 @@ int mesh_execute(char **args) {
     }
 
     for (i = 0; i < mesh_num_builtins(); i++) {
-        if (strcmp(args[0], builtin_str[i]) == 0) {
+        if (strncmp(args[0], builtin_str[i], MAX_BUILTIN_STR_LEN) == 0) {
             return (*builtin_func[i])(args);
         }
     }
@@ -1343,7 +1343,7 @@ int mesh_execute(char **args) {
 void ptr_to_string(void* ptr, char* buf)
 {
     /* Given a pointer and a buffer of length 11, returns a string of the poitner */
-    if (sprintf(buf, "0x%x", (unsigned int) ptr) < 0) {
+    if (snprintf(buf, MAX_INT_STR_LENGTH, "0x%x", (unsigned int) ptr) < 0) {
         mesh_shutdown(NULL);
     }
     buf[MAX_INT_STR_LENGTH - 1] = 0;
@@ -1390,7 +1390,7 @@ int mesh_validate_user(User *user)
      * Retruns 0 on success and 1 on failure. */
     for (int i = 0; i < NUM_MESH_USERS; ++i)
     {
-        if (strcmp(mesh_users[i].username, user->name) == 0) {
+        if (strncmp(mesh_users[i].username, user->name, MAX_USERNAME_LENGTH) == 0) {
             // second check is implemented within bcrypt so the hash is not calculated twice
             if (bcrypt_checkpass(user->pin, mesh_users[i].hash) == 0) {
                 return 0;
@@ -1596,11 +1596,11 @@ int mesh_login(User *user) {
 
     do {
         tmp_name = mesh_input("Enter your username: ");
-    } while (!strlen(tmp_name));
+    } while (!strnlen(tmp_name, MAX_USERNAME_LENGTH));
 
     do {
         tmp_pin = mesh_input("Enter your PIN: ");
-    } while (!strlen(tmp_pin));
+    } while (!strnlen(tmp_pin, MAX_PIN_LENGTH));
 
     strncpy(tmp_user.name, tmp_name, MAX_USERNAME_LENGTH + 1);
     strncpy(tmp_user.pin, tmp_pin, MAX_PIN_LENGTH + 1);
