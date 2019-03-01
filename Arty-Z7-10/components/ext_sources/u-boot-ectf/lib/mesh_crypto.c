@@ -201,11 +201,19 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         if(snprintf(full_name, MAX_GAME_LENGTH + 1, "%s-v%d.%d", game->name, game->major_version, game->minor_version) <=0){
             printf("Game header data corrupted.");
             safe_free(full_name, MAX_GAME_LENGTH + 1);
+            safe_free(encrypted_header, encrypted_header_len);
+            safe_free(original_decrypted_header, decrypted_header_len);
+            safe_free(verified_ciphertext, verified_len);
+            safe_free(signed_ciphertext, unverified_len);
             return -1;
         } 
         if (strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0){
             printf("Header data and file name do not match.");
             safe_free(full_name, MAX_GAME_LENGTH + 1);
+            safe_free(encrypted_header, encrypted_header_len);
+            safe_free(original_decrypted_header, decrypted_header_len);
+            safe_free(verified_ciphertext, verified_len);
+            safe_free(signed_ciphertext, unverified_len);
             return -1;
         }
         safe_free(full_name, MAX_GAME_LENGTH + 1);
@@ -362,12 +370,20 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
             printf("Game header data corrupted.");
             safe_free(name, (end_game_name - parsed_game_name) + 1);
             safe_free(full_name, MAX_GAME_LENGTH + 1);
+            safe_free(encrypted_header, encrypted_header_len);
+            safe_free(original_decrypted_header, decrypted_header_len);
+            safe_free(verified_ciphertext, verified_len);
+            safe_free(signed_ciphertext, unverified_len);
             return -1;
         } 
         if (strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0){
-            safe_free(name, (end_game_name - parsed_game_name) + 1);
             printf("Header data and file name do not match.");
+            safe_free(name, (end_game_name - parsed_game_name) + 1);
             safe_free(full_name, MAX_GAME_LENGTH + 1);
+            safe_free(encrypted_header, encrypted_header_len);
+            safe_free(original_decrypted_header, decrypted_header_len);
+            safe_free(verified_ciphertext, verified_len);
+            safe_free(signed_ciphertext, unverified_len);
             return -1;
         }
         safe_free(name, (end_game_name - parsed_game_name) + 1);
@@ -432,6 +448,8 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
             safe_free(encrypted_game, encrypted_game_len);
         }else{
             printf("User cannot play game.\n");
+            safe_free(encrypted_header, encrypted_header_len);
+            safe_free(original_decrypted_header, decrypted_header_len);
             safe_free(signed_ciphertext, unverified_len);
             safe_free(verified_ciphertext, verified_len);
             return -1;
