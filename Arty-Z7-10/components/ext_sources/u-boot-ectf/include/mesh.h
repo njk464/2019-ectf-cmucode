@@ -8,6 +8,7 @@
 #define MAX_USERNAME_LENGTH 15
 #define MAX_PIN_LENGTH 8
 #define MAX_GAME_LENGTH 31
+#define MAX_GAME_SIZE 4*1024*1024
 #define MAX_INT_STR_LENGTH (sizeof(int) * 2 + 3)
 #define MAX_VERSION_LENGTH MAX_INT_STR_LENGTH
 #define BASE 10
