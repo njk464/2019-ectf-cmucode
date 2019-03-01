@@ -43,8 +43,11 @@
 #undef report_dynamorio_problem
 #undef report_app_problem
 
+#ifdef DEBUG
+#define DPRINT(format,...)  (dr_fprintf(STDOUT, format, ##__VA_ARGS__))
+#else
 #define DPRINT(format,...)
-#define DUMP_STACK(tls)
+#endif
 
 #define DERR(format,...)
 
@@ -54,7 +57,7 @@
 #define OBD(b, i, s, d, sz) (opnd_create_base_disp((b), (i), (s), (d), (sz)))
 
 #define MAX_SIGHANDLERS 64
-#define MAX_SHADOW_SIZE 8192
+#define MAX_SHADOW_SIZE 4096
 
 /***** STATIC GLOBALS AND STRUCTS *****/
 
@@ -67,15 +70,20 @@ static bool found_restore_core_regs = false;
 static app_pc handlers[MAX_SIGHANDLERS];
 static void *handlers_lock;
 
+static uint counter = 3000;
+static bool log_begin = false;
+
 struct frame
 {
     uint lr;
     uint sp;
+    uint saved;
+    uint persist;
 };
 
 struct thread_info
 {
-    int shadow_count;
+    uint shadow_count;
     struct frame shadow_stack[MAX_SHADOW_SIZE];
 };
 
@@ -143,13 +151,17 @@ syscall_filter(void *drcontext, int sysnum)
     return syscall_check(sysnum);
 }
 
+/*
+ * This function filters syscalls (as seen from the list above) and
+ * also registers signal handlers for hooking.
+ */
+
 static bool
 event_pre_syscall(void *drcontext, int sysnum)
 {
     int sig;
     struct sigaction *act;
 
-    DPRINT("syscall: %d\n", sysnum);
     sysnum = sysnum % 0x900000;
     if (syscall_check(sysnum))
     {
@@ -161,7 +173,6 @@ event_pre_syscall(void *drcontext, int sysnum)
 
     if (sysnum == SYS_sigaction || sysnum == SYS_rt_sigaction)
     {
-        DPRINT("SYS_sigaction/rt_sigaction.\n");
         sig = dr_syscall_get_param(drcontext, 0);
         act = (struct sigaction *)dr_syscall_get_param(drcontext, 1);
         if (!act)
@@ -196,8 +207,143 @@ event_pre_syscall(void *drcontext, int sysnum)
     return true;
 }
 
+/***** SIGNATURES *****/
+
+/*
+ * For identifying CRT code.
+ */
+static bool
+match_crt_signature(instrlist_t *bb)
+{
+    instr_t *instrp;
+    byte *raw;
+
+    instrp = instrlist_first_app(bb);
+    raw = instr_get_raw_bits(instrp);
+
+    if (*(uint *)raw == 0xe3a0b000)
+    {
+        instrp = instr_get_next(instrp);
+        if (!instrp) return false;
+        raw = instr_get_raw_bits(instrp);
+        return *(uint *)raw == 0xe3a0e000;
+    }
+
+    if (*(uint *)raw == 0x0b00f04f)
+    {
+        instrp = instr_get_next(instrp);
+        if (!instrp) return false;
+        raw = instr_get_raw_bits(instrp);
+        return *(uint *)raw == 0x0e00f04f;
+    }
+
+    return false;
+}
+
+/*
+ * For identifying setjmp.
+ */
+static bool
+match_setjmp_signature(instrlist_t *bb)
+{
+    instr_t *instrp;
+    byte *raw;
+
+    instrp = instrlist_first_app(bb);
+    raw = instr_get_raw_bits(instrp);
+
+    if (*(uint *)(raw - 4) == 0xf102ecec)
+    {
+        return *(uint *)(raw - 8) == 0xe102ecec;
+    }
+
+    if (*(uint *)(raw - 4) == 0xececf102)
+    {
+        return *(uint *)(raw - 8) == 0xecece102;
+    }
+
+    if (*(uint *)raw == 0xa102ecec)
+    {
+        return *(uint *)(raw + 4) == 0xb102ecec;
+    }
+
+    if (*(uint *)raw == 0xececa102)
+    {
+        return *(uint *)(raw + 4) == 0xececb102;
+    }
+
+    return false;
+}
+
+/*
+ * For identifying longjmp.
+ */
+static bool
+match_longjmp_signature(instrlist_t *bb)
+{
+    instr_t *instrp;
+    byte *raw;
+
+    instrp = instrlist_first_app(bb);
+    raw = instr_get_raw_bits(instrp);
+
+    if (*(uint *)(raw - 4) == 0xf102ecfc)
+    {
+        return *(uint *)(raw - 8) == 0xe102ecfc;
+    }
+
+    if (*(uint *)(raw - 4) == 0xecfcf102)
+    {
+        return *(uint *)(raw - 8) == 0xecfce102;
+    }
+
+    if (*(uint *)raw == 0xa102ecfc)
+    {
+        return *(uint *)(raw + 4) == 0xb102ecfc;
+    }
+
+    if (*(uint *)raw == 0xecfca102)
+    {
+        return *(uint *)(raw + 4) == 0xecfcb102;
+    }
+
+    return false;
+}
+
+/*
+ * For identifying __restore_core_regs.
+ */
+static bool
+match_restore_core_regs_signature(instrlist_t *bb)
+{
+    int i;
+    instr_t *instrp;
+    byte *raw;
+
+    instrp = instrlist_last_app(bb);
+    
+    if (instr_is_return(instrp))
+    {
+        for (i = 5; instrp && i;
+             instrp = instr_get_prev_app(instrp), i--)
+        {
+            raw = instr_get_raw_bits(instrp);
+            if (*(uint *)raw == 0xe8900fff ||
+                *(uint *)raw == 0x0fffe890)
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 /***** OTHER INSTRUMENTATION *****/
 
+/*
+ * Basic block entry hook.
+ */
 static void
 bb_instrument_entry(uint next_l, uint next_h, uint sp)
 {
@@ -206,13 +352,10 @@ bb_instrument_entry(uint next_l, uint next_h, uint sp)
     void *drcontext;
     struct thread_info *tls;
 
-    if (!found_main) return;
-
     drcontext = dr_get_current_drcontext();
     tls = (struct thread_info *)dr_get_tls_field(drcontext);
 
-    DPRINT("I'm calling!\n");
-    DUMP_STACK(tls);
+    if (!found_main) return;
 
     if (tls->shadow_count >= MAX_SHADOW_SIZE)
     {
@@ -223,9 +366,8 @@ bb_instrument_entry(uint next_l, uint next_h, uint sp)
     res = (next_h << 16) + next_l;
     tls->shadow_stack[tls->shadow_count].lr = res;
     tls->shadow_stack[tls->shadow_count].sp = sp;
+    tls->shadow_stack[tls->shadow_count].persist = 0;
     tls->shadow_count++;
-
-    DUMP_STACK(tls);
 }
 
 static void
@@ -234,11 +376,14 @@ insert_entry_instr(void *drcontext, void *tag, instrlist_t *bb,
 {
     dr_insert_clean_call(drcontext, bb, instrlist_last(bb),
                          bb_instrument_entry, false, 3,
-                         opnd_create_immed_uint((uint)next & 0xffff, OPSZ_2),
-                         opnd_create_immed_uint((uint)next >> 16, OPSZ_2),
-                         opnd_create_reg(DR_REG_SP));
+                         OUI((uint)next & 0xffff, OPSZ_2),
+                         OUI((uint)next >> 16, OPSZ_2),
+                         OCR(DR_REG_SP));
 }
 
+/*
+ * Finding IT blocks.
+ */
 static instr_t *
 get_it_instr(instr_t *target)
 {
@@ -256,6 +401,9 @@ get_it_instr(instr_t *target)
     return NULL;
 }
 
+/*
+ * Basic block exit hook.
+ */
 static void
 bb_instrument_exit(bool is_stack, uint sp, uint lr, int offset,
                    dr_pred_type_t exit_pred)
@@ -263,16 +411,18 @@ bb_instrument_exit(bool is_stack, uint sp, uint lr, int offset,
     int i;
     uint ret_addr;
     uint stack_addr;
+    ushort persist;
     void *drcontext;
     dr_mcontext_t mc = { sizeof(mc), DR_MC_CONTROL };
     uint cpsr;
     bool Z, C, N, V, cond;
     struct thread_info *tls;
-
-    if (!found_main) return;
+    struct frame *stack;
 
     drcontext = dr_get_current_drcontext();
     tls = (struct thread_info *)dr_get_tls_field(drcontext);
+
+    if (!found_main) return;
 
     /* Check for predicated returns */
     if (exit_pred)
@@ -342,23 +492,36 @@ bb_instrument_exit(bool is_stack, uint sp, uint lr, int offset,
         }
     }
 
-    ret_addr = is_stack ? *(uint *)(sp + offset) : lr;
+    ret_addr = is_stack ? (*(uint *)(sp + offset)): lr;
+
     ret_addr = ret_addr & ~1;
 
     stack_addr = is_stack ? sp + offset + 4 : sp;
 
-    DUMP_STACK(tls);
+    DPRINT("IS_STACK: %d\n", is_stack);
     DPRINT("RET: 0x%x\n", ret_addr);
     DPRINT("STACK: 0x%x\n", stack_addr);
+
+    stack = tls->shadow_stack;
 
     while (tls->shadow_count)
     {
         tls->shadow_count--;
-        if (tls->shadow_stack[tls->shadow_count].lr == ret_addr &&
-            tls->shadow_stack[tls->shadow_count].sp == stack_addr)
+        if (stack[tls->shadow_count].lr == ret_addr &&
+            stack[tls->shadow_count].sp == stack_addr)
         {
-            tls->shadow_count++;
-            DUMP_STACK(tls);
+            persist = stack[tls->shadow_count].persist;
+            if (persist == 1)
+            {
+                DPRINT("Persist.\n");
+                stack[tls->shadow_count].persist++;
+                tls->shadow_count++;
+            }
+            else if (persist > 1)
+            {
+                DERR("Bad catto!\n");
+                dr_abort();
+            }
             return;
         }
         DPRINT("Mismatch!\n");
@@ -407,33 +570,38 @@ insert_exit_instr(void *drcontext, void *tag, instrlist_t *bb)
 
     if (ret_src == DR_REG_LR)
     {
+        /* No canary */
         dr_insert_clean_call(drcontext, bb, instrp,
-                             bb_instrument_exit, false, 6,
-                             opnd_create_immed_uint(0, OPSZ_1),
-                             opnd_create_reg(DR_REG_SP),
-                             opnd_create_reg(DR_REG_LR),
-                             opnd_create_immed_int(0, OPSZ_1),
-                             opnd_create_immed_int(exit_pred, OPSZ_1));
+                             bb_instrument_exit, false, 5,
+                             OUI(0, OPSZ_1),
+                             OCR(DR_REG_SP),
+                             OCR(DR_REG_LR),
+                             OUI(0, OPSZ_1),
+                             OUI(exit_pred, OPSZ_1));
     }
     else
     {
         /*
          * -1 for SP, -1 for 0-indexing for -2 total.
          * Displacement always fits in 1 byte.
+         * Possibly has canary.
          */
         dr_insert_clean_call(drcontext, bb, instrp,
-                             bb_instrument_exit, false, 6,
-                             opnd_create_immed_uint(1, OPSZ_1),
-                             opnd_create_reg(DR_REG_SP),
-                             opnd_create_reg(DR_REG_LR),
-                             opnd_create_immed_int((instr_num_dsts(exit) - 2) * 4,
-                                                   OPSZ_1),
-                             opnd_create_immed_int(exit_pred, OPSZ_1));
+                             bb_instrument_exit, false, 5,
+                             OUI(1, OPSZ_1),
+                             OCR(DR_REG_SP),
+                             OCR(DR_REG_LR),
+                             OUI((instr_num_dsts(exit) - 2) * 4,
+                                                    OPSZ_1),
+                             OUI(exit_pred, OPSZ_1));
     }
 }
 
+/*
+ * Setjmp handling.
+ */
 static void
-core_regs_weak_return(uint sp, uint lr)
+setjmp_persist()
 {
     void *drcontext;
     struct thread_info *tls;
@@ -441,20 +609,48 @@ core_regs_weak_return(uint sp, uint lr)
     drcontext = dr_get_current_drcontext();
     tls = (struct thread_info *)dr_get_tls_field(drcontext);
 
-    /* Offset from pop pc */
-    sp = sp + 4;
+    if (!found_main) return;
 
-    DUMP_STACK(tls);
-    DPRINT("CORE_REGS LR: 0x%x\n", lr & ~1);
-    DPRINT("CORE_REGS STACK: 0x%x\n", sp);
+    tls->shadow_stack[tls->shadow_count - 1].persist = 1;
+}
+
+static void
+insert_setjmp_instr(void *drcontext, void *tag, instrlist_t *bb)
+{
+    dr_insert_clean_call(drcontext, bb, instrlist_last_app(bb),
+                         setjmp_persist, false, 0);
+}
+
+/*
+ * Exception/longjmp handling.
+ */
+static void
+exception_return(bool is_restore_core_regs, uint sp, uint lr)
+{
+    void *drcontext;
+    struct thread_info *tls;
+    struct frame *stack;
+
+    drcontext = dr_get_current_drcontext();
+    tls = (struct thread_info *)dr_get_tls_field(drcontext);
+
+    if (!found_main) return;
+
+    /* Offset from pop pc */
+    if (is_restore_core_regs) sp = sp + 4;
+
+    stack = tls->shadow_stack;
 
     while (tls->shadow_count)
     {
-        tls->shadow_count --;
-        if (tls->shadow_stack[tls->shadow_count].sp == sp)
+        tls->shadow_count--;
+        if (stack[tls->shadow_count].sp == sp)
         {
-            tls->shadow_count++;
-            DUMP_STACK(tls);
+            if (stack[tls->shadow_count].persist)
+            {
+                DPRINT("Exception persist.\n");
+                tls->shadow_count++;
+            }
             return;
         }
         DPRINT("Mismatch!\n");
@@ -465,42 +661,28 @@ core_regs_weak_return(uint sp, uint lr)
 }
 
 static void
+insert_longjmp_instr(void *drcontext, void *tag, instrlist_t *bb)
+{
+    dr_insert_clean_call(drcontext, bb, instrlist_last_app(bb),
+                         exception_return, false, 3,
+                         OUI(0, OPSZ_1),
+                         OCR(DR_REG_SP),
+                         OCR(DR_REG_LR));
+}
+
+static void
 insert_core_regs_instr(void *drcontext, void *tag, instrlist_t *bb)
 {
     dr_insert_clean_call(drcontext, bb, instrlist_last_app(bb),
-                         core_regs_weak_return, false, 2,
-                         opnd_create_reg(DR_REG_SP),
-                         opnd_create_reg(DR_REG_LR));
+                         exception_return, false, 2,
+                         OUI(1, OPSZ_1),
+                         OCR(DR_REG_SP),
+                         OCR(DR_REG_LR));
 }
 
-static bool
-match_crt_signature(instrlist_t *bb)
-{
-    instr_t *instrp;
-    byte *raw;
-
-    instrp = instrlist_first_app(bb);
-    raw = instr_get_raw_bits(instrp);
-
-    if (*(uint *)raw == 0xe3a0b000)
-    {
-        instrp = instr_get_next(instrp);
-        if (!instrp) return false;
-        raw = instr_get_raw_bits(instrp);
-        return *(uint *)raw == 0xe3a0e000;
-    }
-
-    if (*(uint *)raw == 0x0b00f04f)
-    {
-        instrp = instr_get_next(instrp);
-        if (!instrp) return false;
-        raw = instr_get_raw_bits(instrp);
-        return *(uint *)raw == 0x0e00f04f;
-    }
-
-    return false;
-}
-
+/*
+ * CRT handling.
+ */
 static void
 crt_grab_main(uint app_main)
 {
@@ -513,9 +695,12 @@ insert_crt_instr(void *drcontext, void *tag, instrlist_t *bb)
 {
     dr_insert_clean_call(drcontext, bb, instrlist_last_app(bb),
                          crt_grab_main, false, 1,
-                         opnd_create_reg(DR_REG_R0));
+                         OCR(DR_REG_R0));
 }
 
+/*
+ * Special main handling.
+ */
 static void
 shadow_main_sp_lr(uint sp, uint app_main_lr)
 {
@@ -536,10 +721,13 @@ insert_main_instr(void *drcontext, void *tag, instrlist_t *bb)
 {
     dr_insert_clean_call(drcontext, bb, instrlist_first_app(bb),
                          shadow_main_sp_lr, false, 2,
-                         opnd_create_reg(DR_REG_SP),
-                         opnd_create_reg(DR_REG_LR));
+                         OCR(DR_REG_SP),
+                         OCR(DR_REG_LR));
 }
 
+/*
+ * Signal handler hooking.
+ */
 static void
 shadow_sighandler_sp_lr(uint sp, uint lr)
 {
@@ -554,15 +742,9 @@ shadow_sighandler_sp_lr(uint sp, uint lr)
     count = tls->shadow_count;
     stack = tls->shadow_stack;
 
-    /* Small optim */
-    if (!count ||
-        stack[count - 1].lr != lr & ~1 ||
-        stack[count - 1].sp != sp)
-    {
-        stack[count].lr = lr & ~1;
-        stack[count].sp = sp;
-        tls->shadow_count++;
-    }
+    stack[count].lr = lr & ~1;
+    stack[count].sp = sp;
+    tls->shadow_count++;
 }
 
 static void
@@ -570,10 +752,13 @@ insert_entry_sighandler_instr(void *drcontext, void *tag, instrlist_t *bb)
 {
     dr_insert_clean_call(drcontext, bb, instrlist_first_app(bb),
                          shadow_sighandler_sp_lr, false, 2,
-                         opnd_create_reg(DR_REG_SP),
-                         opnd_create_reg(DR_REG_LR));
+                         OCR(DR_REG_SP),
+                         OCR(DR_REG_LR));
 }
 
+/*
+ * Main function which determines what kinds of hooks to apply.
+ */
 static dr_emit_flags_t
 event_bb(void *drcontext, void *tag, instrlist_t *bb,
          bool for_trace, bool translating)
@@ -584,41 +769,33 @@ event_bb(void *drcontext, void *tag, instrlist_t *bb,
     app_pc bb_start;
     uint pc, i, n;
 
-    DPRINT("=========================\n");
-
     if (for_trace || translating)
     {
         DPRINT("Skipping\n");
         return DR_EMIT_DEFAULT;
     }
 
-    if (!found_restore_core_regs)
+    if (match_setjmp_signature(bb))
     {
-        for (instrp = instrlist_first_app(bb); instrp;
-             instrp = instr_get_next_app(instrp))
-        {
-            /* Find restore_core_regs (C++) */
-            if (instr_get_opcode(instrp) == OP_ldm &&
-                instr_num_dsts(instrp) == 12 &&
-                opnd_get_reg(instr_get_dst(instrp, 11)) == DR_REG_R11 &&
-                opnd_get_base(instr_get_src(instrp, 0)) == DR_REG_R0)
-            {
-                DPRINT("Found restore_core_regs candidate.\n");
+        DPRINT("Found setjmp.\n");
+        insert_setjmp_instr(drcontext, tag, bb);
+        return DR_EMIT_DEFAULT;
+    }
 
-                instrp = instrlist_last_app(bb);
-                if (instr_is_return(instrp) &&
-                    !instr_get_predicate(instrp) &&
-                    instr_get_opcode(instrp) == OP_ldm &&
-                    instr_num_dsts(instrp) == 2 &&
-                    opnd_get_base(instr_get_src(instrp, 0)) == DR_REG_SP)
-                {
-                    DPRINT("Found restore_core_regs.\n");
-                    found_restore_core_regs = true;
-                    insert_core_regs_instr(drcontext, tag, bb);
-                    goto END;
-                }
-            }
-        }
+    if (match_longjmp_signature(bb))
+    {
+        DPRINT("Found longjmp.\n");
+        insert_longjmp_instr(drcontext, tag, bb);
+        return DR_EMIT_DEFAULT;
+    }
+
+    if (!found_restore_core_regs &&
+        match_restore_core_regs_signature(bb))
+    {
+        DPRINT("Found restore_core_regs.\n");
+        found_restore_core_regs = true;
+        insert_core_regs_instr(drcontext, tag, bb);
+        return DR_EMIT_DEFAULT;
     }
 
     instrp = instrlist_last_app(bb);
@@ -626,6 +803,7 @@ event_bb(void *drcontext, void *tag, instrlist_t *bb,
 
     if (instr_is_call(instrp))
     {
+        DPRINT("Instrument call\n");
         insert_entry_instr(drcontext, tag, bb, pc + instr_length(drcontext, instrp));
     }
     else if (instr_is_return(instrp))
@@ -635,12 +813,13 @@ event_bb(void *drcontext, void *tag, instrlist_t *bb,
          * but passes instr_is_return.
          * However, ldr pc, [sp], #4 is a common return when only LR is pushed.
          */
+        DPRINT("(Maybe) Instrument ret\n");
         opcode = instr_get_opcode(instrp);
         if (opcode != OP_ldr)
         {
             insert_exit_instr(drcontext, tag, bb);
         }
-        else if (opcode == OP_ldr)
+        else
         {
             if (instr_num_srcs(instrp) == 3)
             {
@@ -689,13 +868,16 @@ event_bb(void *drcontext, void *tag, instrlist_t *bb,
         }
     }
 
-END:
     return DR_EMIT_DEFAULT;
 }
 
+/*
+ * Thread initialization handler.
+ */
 static void
 event_thread_init(void *drcontext)
 {
+    file_t f;
     struct thread_info *tls;
 
     DPRINT("Starting thread.\n");
@@ -704,6 +886,9 @@ event_thread_init(void *drcontext)
     tls->shadow_count = 0;
 }
 
+/*
+ * Thread exit handler.
+ */
 static void
 event_thread_exit(void *drcontext)
 {
@@ -714,17 +899,25 @@ event_thread_exit(void *drcontext)
     dr_thread_free(drcontext, tls, sizeof(struct thread_info));
 }
 
+/*
+ * Exit handler.
+ */
 static void
 event_exit(void)
 {
     DERR("I am a cat\n");
+    dr_abort();
 }
 
 /***** MAIN *****/
 
+/*
+ * Main function which registers all the handlers.
+ */
 DR_EXPORT void
 dr_client_main(client_id_t id, int argc, const char *argv[])
 {
+    disassemble_set_syntax(DR_DISASM_ARM);
     dr_register_filter_syscall_event(syscall_filter);
     dr_register_pre_syscall_event(event_pre_syscall);
     dr_register_bb_event(event_bb);
