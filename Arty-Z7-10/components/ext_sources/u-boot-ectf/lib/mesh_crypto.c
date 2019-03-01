@@ -205,8 +205,8 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         game->name[end_game_name - parsed_game_name] = '\0';
 
         // compare the header to provided name
-         full_name = (char*) safe_malloc(MAX_GAME_LENGTH + 1);
-        if(snprintf(full_name, MAX_GAME_LENGTH + 1, "%s-v%d.%d", game->name, game->major_version, game->minor_version) <=0){
+        full_name = (char*) safe_malloc(MAX_GAME_LENGTH + 1);
+        if(snprintf(full_name, MAX_GAME_LENGTH + 1, "%s-v%d.%d", game->name, game->major_version, game->minor_version) <= 0){
             printf("Game header data corrupted.");
             return_value = -1;
             goto free_and_return;
@@ -370,7 +370,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
 
         // compare the header to provided name
         full_name = (char*) safe_malloc(MAX_GAME_LENGTH + 1);
-        if(snprintf(full_name, MAX_GAME_LENGTH + 1, "%s-v%s.%s", name, major_version_str, minor_version_str) <=0){
+        if(snprintf(full_name, MAX_GAME_LENGTH + 1, "%s-v%s.%s", name, major_version_str, minor_version_str) <= 0){
             printf("Game header data corrupted.");
             return_value = -1;
             goto free_and_return;
