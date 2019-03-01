@@ -4125,7 +4125,7 @@ CONFIG_packagegroup-core-boot=y
 CONFIG_dynamorio=y
 CONFIG_mesh-game-loader=y
 # CONFIG_peekpoke is not set
-CONFIG_uioctl=y
+# CONFIG_uioctl is not set
 
 #
 # user packages 
@@ -4137,4 +4137,4 @@ CONFIG_wipe=y
 #
 # PetaLinux RootFS Settings
 #
-CONFIG_ROOTFS_ROOT_PASSWD="ectf-cmu-temp-root-passwd"
+CONFIG_ROOTFS_ROOT_PASSWD="root"

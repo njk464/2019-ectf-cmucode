@@ -41,7 +41,6 @@ def gen_keypair():
 def validate_users(lines):
     """Validate that the users data is formatted properly and return a list
     of tuples of users and pins.
-    TODO: Check this regular expression
     lines: list of strings from a users.txt file with newlines removed
     """
     # Regular expression to ensure that there is a username and an 8 digit pin
@@ -59,7 +58,6 @@ def validate_users(lines):
 def factory_secrets_users(lines):
     """Validate that the users data is formatted properly and return a list
     of tuples of users and pins.
-    TODO: Check this regular expression
     lines: list of strings from a users.txt file with newlines removed
     """
     # Regular expression to ensure that there is a username and an 8 digit pin
@@ -204,6 +202,10 @@ def write_factory_secrets(users, f, h):
     """
     flag = 0
     salt_array = []
+    if len(users) > 31:
+        print("Max Users Exceeded. Only 32 users are permitted.")
+        exit()
+    
     for user in users:
         if user == 'demo':
             flag = 1

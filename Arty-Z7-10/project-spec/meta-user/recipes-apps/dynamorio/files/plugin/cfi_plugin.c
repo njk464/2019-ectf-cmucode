@@ -31,48 +31,61 @@
  * DAMAGE.
  */
 
-/* Code Manipulation API Sample:
- * empty.c
- *
- * Serves as an example of an empty client that does nothing but
- * register for the exit event.
- */
-
 #include "dr_api.h"
+#include <signal.h>
 #include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/syscall.h>
 
-#define COND_EQ 0
-#define COND_NE 1
-#define COND_CS 2
-#define COND_CC 3
-#define COND_MI 4
-#define COND_PL 5
-#define COND_VS 6
-#define COND_VC 7
-#define COND_HI 8
-#define COND_LS 9
-#define COND_GE 10
-#define COND_LT 11
-#define COND_GT 12
-#define COND_LE 13
-#define COND_AL 14
-
-//#define DEBUG
+/***** DEFINES *****/
 
 #undef report_dynamorio_problem
 #undef report_app_problem
 
-#ifdef DEBUG
-#define DPRINT(format,...) (dr_printf(format, ##__VA_ARGS__))
-#else
 #define DPRINT(format,...)
-#endif
+#define DUMP_STACK(tls)
+
+#define DERR(format,...)
+
+#define IMP(bb, w, i)       (instrlist_meta_preinsert((bb), (w), (i)))
+#define OCR(r)              (opnd_create_reg((r)))
+#define OUI(i, sz)          (opnd_create_immed_uint((i), (sz)))
+#define OBD(b, i, s, d, sz) (opnd_create_base_disp((b), (i), (s), (d), (sz)))
+
+#define MAX_SIGHANDLERS 64
+#define MAX_SHADOW_SIZE 8192
+
+/***** STATIC GLOBALS AND STRUCTS *****/
+
+static bool found_main = false;
+static bool run_main = false;
+static app_pc main_entry = NULL;
+
+static bool found_restore_core_regs = false;
+
+static app_pc handlers[MAX_SIGHANDLERS];
+static void *handlers_lock;
+
+struct frame
+{
+    uint lr;
+    uint sp;
+};
+
+struct thread_info
+{
+    int shadow_count;
+    struct frame shadow_stack[MAX_SHADOW_SIZE];
+};
+
+/***** SYSCALL FILTER *****/
 
 static bool
 syscall_check(int sysnum)
 {
     return (sysnum == SYS_execve ||
+            sysnum == SYS_execveat ||
             sysnum == SYS_getgroups ||
             sysnum == SYS_setgroups ||
             sysnum == SYS_prctl ||
@@ -83,7 +96,6 @@ syscall_check(int sysnum)
             sysnum == SYS_bpf ||
             sysnum == SYS_clock_adjtime ||
             sysnum == SYS_clock_settime ||
-            sysnum == SYS_clone ||
             sysnum == SYS_delete_module ||
             sysnum == SYS_finit_module ||
             sysnum == SYS_get_mempolicy ||
@@ -127,310 +139,598 @@ syscall_check(int sysnum)
 static bool
 syscall_filter(void *drcontext, int sysnum)
 {
+    sysnum = sysnum % 0x900000;
     return syscall_check(sysnum);
 }
 
 static bool
 event_pre_syscall(void *drcontext, int sysnum)
 {
+    int sig;
+    struct sigaction *act;
+
+    DPRINT("syscall: %d\n", sysnum);
+    sysnum = sysnum % 0x900000;
     if (syscall_check(sysnum))
     {
-        DPRINT("Bad cat!\n");
+        DERR("Bad cat!\n");
         dr_syscall_set_result(drcontext, -1);
         dr_abort();
         return false;
     }
+
+    if (sysnum == SYS_sigaction || sysnum == SYS_rt_sigaction)
+    {
+        DPRINT("SYS_sigaction/rt_sigaction.\n");
+        sig = dr_syscall_get_param(drcontext, 0);
+        act = (struct sigaction *)dr_syscall_get_param(drcontext, 1);
+        if (!act)
+        {
+            DPRINT("Handler being deregistered.\n");
+            return true;
+        }
+
+        if (sig >= MAX_SIGHANDLERS)
+        {
+            DERR("Invalid signal.\n");
+            dr_abort();
+        }
+
+        if (act->sa_flags & SA_SIGINFO)
+        {
+            DPRINT("SA_SIGACTION: %p\n", act->sa_sigaction);
+            dr_mutex_lock(handlers_lock);
+            handlers[sig] = (app_pc)((uint)act->sa_sigaction & ~1);
+            dr_mutex_unlock(handlers_lock);
+        }
+        else if (act->sa_handler != SIG_DFL || act->sa_handler != SIG_IGN)
+        {
+            DPRINT("SA_HANDLER: %p\n", act->sa_handler);
+            dr_mutex_lock(handlers_lock);
+            handlers[sig] = (app_pc)((uint)act->sa_handler & ~1);
+            dr_mutex_unlock(handlers_lock);
+        }
+
+        /* We don't care about default handlers */
+    }
     return true;
 }
 
-static bool
-has_call(instrlist_t *bb)
-{
-    /*
-     * Checks if the last instruction is a BL, BLX or BLX_IND.
-     * WARN: Calls should be the last instruction in a BB!
-     */
-
-    return instr_is_call(instrlist_last_app(bb));
-}
-
-static bool
-has_ret(instrlist_t *bb)
-{
-    /*
-     * Check for returns.
-     * WARN: Rets should be the last instruction in a BB!
-     */
-    
-    return instr_is_return(instrlist_last_app(bb));
-}
-
-/* TODO: Too heavyweight, factor out all these calls */
-static void
-bb_instrument_call()
-{
-    //instr_t instr;
-    //void *drcontext;
-    //dr_mcontext_t mcontext;
-
-    //drcontext = dr_get_current_drcontext();
-    //dr_get_mcontext(drcontext, &mcontext);
-    //instr_init(drcontext, &instr);
-    //disassemble(drcontext, mcontext.pc, STDOUT);
-    //printf("Target: %p\n", instr_get_branch_target_pc(
-}
+/***** OTHER INSTRUMENTATION *****/
 
 static void
-bb_instrument_call_cond()
+bb_instrument_entry(uint next_l, uint next_h, uint sp)
 {
-}
-
-static void
-bb_instrument_ret(uint is_stack, uint addr, uint offset)
-{
-    uint real_addr;
-    uint thumb;
-    //instr_t instr2, instr4;
+    int i;
+    uint res;
     void *drcontext;
+    struct thread_info *tls;
 
-    /* Calculate actual address */
-    if (!is_stack)
-    {
-        real_addr = addr;
-    }
-    else
-    {
-        real_addr = *(uint *)(addr + offset);
-    }
+    if (!found_main) return;
 
-    thumb = real_addr & 1;
-    real_addr = real_addr & ~1;
-    DPRINT("Found ret addr: %p\n", real_addr);
-
-    /*
-     * Check valid - Don't know how to force disassembly mode so
-     * doing this manually
-     */
     drcontext = dr_get_current_drcontext();
-    //instr_init(drcontext, &instr2);
-    //instr_init(drcontext, &instr4);
-    //decode(drcontext, (byte *)(real_addr - 2), &instr2);
-    //decode(drcontext, (byte *)(real_addr - 4), &instr4);
-    if (thumb)
+    tls = (struct thread_info *)dr_get_tls_field(drcontext);
+
+    DPRINT("I'm calling!\n");
+    DUMP_STACK(tls);
+
+    if (tls->shadow_count >= MAX_SHADOW_SIZE)
     {
-        DPRINT("Thumb:\n");
-        DPRINT("-4: %hx\n-2: %hx\n", *(ushort *)(real_addr - 4), *(ushort *)(real_addr - 2));
-#ifdef DEBUG
-        disassemble(drcontext, real_addr - 2, STDOUT);
-        disassemble(drcontext, real_addr - 4, STDOUT);
-#endif
-        if ((*(byte *)(real_addr - 3) & 0xf8) != 0xf0 &&              /* BL/BLX imm */
-            (*(ushort *)(real_addr - 2) & 0xff87) != 0x4780)          /* BLX reg */
-        {
-            DPRINT("Very bad cat!\n");
-            dr_abort();
-        }
+        DERR("Call stack depth exceeded.\n");
+        dr_abort();
     }
-    else
-    {
-        DPRINT("Arm:\n");
-        DPRINT("-4: %x\n", *(uint *)(real_addr - 4));
-#ifdef DEBUG
-        disassemble(drcontext, real_addr - 2, STDOUT);
-        disassemble(drcontext, real_addr - 4, STDOUT);
-#endif
-        if ((*(byte *)(real_addr - 1) & 0x0f) != 0x0b &&              /* BL imm */
-            (*(byte *)(real_addr - 1) & 0xfe) != 0xfa &&              /* BLX imm */
-            (*(uint *)(real_addr - 4) & 0x0ffffff0) != 0x012fff30)    /* BLX reg */
-        {
-            DPRINT("Very bad cat!\n");
-            dr_abort();
-        }
-    }
+
+    res = (next_h << 16) + next_l;
+    tls->shadow_stack[tls->shadow_count].lr = res;
+    tls->shadow_stack[tls->shadow_count].sp = sp;
+    tls->shadow_count++;
+
+    DUMP_STACK(tls);
 }
 
 static void
-bb_instrument_ret_cond()
+insert_entry_instr(void *drcontext, void *tag, instrlist_t *bb,
+                   uint next)
 {
+    dr_insert_clean_call(drcontext, bb, instrlist_last(bb),
+                         bb_instrument_entry, false, 3,
+                         opnd_create_immed_uint((uint)next & 0xffff, OPSZ_2),
+                         opnd_create_immed_uint((uint)next >> 16, OPSZ_2),
+                         opnd_create_reg(DR_REG_SP));
 }
 
 static instr_t *
-get_it_instr(void *drcontext, instr_t *target)
+get_it_instr(instr_t *target)
 {
-    /*
-     * Find itxxx instruction containing the call/ret.
-     * itxxx instructions cannot nest.
-     * itxxx instructions can only have branches at the end of their block.
-     * At most one branch per block.
-     * WARN: Might need to use instruction init/reset/decode/free
-     */
-
     int i = 4, j;
     instr_t *instrp;
 
-    /* Unpredicated instrs are safe to instrument */
     if (!instr_get_predicate(target)) return NULL;
 
-    /* Instruction is in some IT block */
     for (instrp = instr_get_prev(target); i && instrp;
          i--, instrp = instr_get_prev(instrp))
     {
-        if (instr_get_opcode(instrp) == OP_it)
-        {
-            DPRINT("IT count: %d\n", instr_it_block_get_count(instrp));
-            for (j = 0; j < instr_it_block_get_count(instrp); j++)
-            {
-                DPRINT("IT pred %d: %d\n", j, instr_it_block_get_pred(instrp, j));
-            }
-            return instrp;
-        }
+        if (instr_get_opcode(instrp) == OP_it) return instrp;
     }
 
     return NULL;
 }
 
 static void
-insert_call_instr(void *drcontext, void *tag, instrlist_t *bb)
+bb_instrument_exit(bool is_stack, uint sp, uint lr, int offset,
+                   dr_pred_type_t exit_pred)
 {
-    instr_t *instrp, *call;
-    opnd_t call_opnd;
+    int i;
+    uint ret_addr;
+    uint stack_addr;
+    void *drcontext;
+    dr_mcontext_t mc = { sizeof(mc), DR_MC_CONTROL };
+    uint cpsr;
+    bool Z, C, N, V, cond;
+    struct thread_info *tls;
 
-    call = instrlist_last_app(bb);
-    instrp = get_it_instr(drcontext, call);
-    if (!instrp)
+    if (!found_main) return;
+
+    drcontext = dr_get_current_drcontext();
+    tls = (struct thread_info *)dr_get_tls_field(drcontext);
+
+    /* Check for predicated returns */
+    if (exit_pred)
     {
-        dr_insert_clean_call(drcontext, bb, call,
-                             bb_instrument_call, false, 0);
+        dr_get_mcontext(drcontext, &mc);
+        cpsr = mc.cpsr;
+        DPRINT("Predicate: %d\n", exit_pred);
+        DPRINT("CPSR: %x\n", cpsr);
+        N = ((cpsr & 0x80000000) != 0);
+        Z = ((cpsr & 0x40000000) != 0);
+        C = ((cpsr & 0x20000000) != 0);
+        V = ((cpsr & 0x10000000) != 0);
+        switch (exit_pred)
+        {
+            case DR_PRED_EQ:
+                cond = Z;
+                break;
+            case DR_PRED_NE:
+                cond = !Z;
+                break;
+            case DR_PRED_CS:
+                cond = C;
+                break;
+            case DR_PRED_CC:
+                cond = !C;
+                break;
+            case DR_PRED_MI:
+                cond = N;
+                break;
+            case DR_PRED_PL:
+                cond = !N;
+                break;
+            case DR_PRED_VS:
+                cond = V;
+                break;
+            case DR_PRED_VC:
+                cond = !V;
+                break;
+            case DR_PRED_HI:
+                cond = (C && !Z);
+                break;
+            case DR_PRED_LS:
+                cond = (!C || Z);
+                break;
+            case DR_PRED_GE:
+                cond = (N == V);
+                break;
+            case DR_PRED_LT:
+                cond = (N != V);
+                break;
+            case DR_PRED_GT:
+                cond = (!Z && (N == V));
+                break;
+            case DR_PRED_LE:
+                cond = (Z || (N != V));
+                break;
+            case DR_PRED_AL:
+            default:
+                cond = 1;
+                break;
+        }
+
+        if (!cond)
+        {
+            DPRINT("Condition not satisfied.\n");
+            return;
+        }
     }
-    else
+
+    ret_addr = is_stack ? *(uint *)(sp + offset) : lr;
+    ret_addr = ret_addr & ~1;
+
+    stack_addr = is_stack ? sp + offset + 4 : sp;
+
+    DUMP_STACK(tls);
+    DPRINT("RET: 0x%x\n", ret_addr);
+    DPRINT("STACK: 0x%x\n", stack_addr);
+
+    while (tls->shadow_count)
+    {
+        tls->shadow_count--;
+        if (tls->shadow_stack[tls->shadow_count].lr == ret_addr &&
+            tls->shadow_stack[tls->shadow_count].sp == stack_addr)
+        {
+            tls->shadow_count++;
+            DUMP_STACK(tls);
+            return;
+        }
+        DPRINT("Mismatch!\n");
+    }
+
+    DERR("No more food...\n");
+    dr_abort();
+}
+
+static void
+insert_exit_instr(void *drcontext, void *tag, instrlist_t *bb)
+{
+    /* Assume normal stack functionality */
+    instr_t *instrp, *exit;
+    opnd_t exit_opnd;
+    reg_id_t ret_src;
+    dr_pred_type_t exit_pred;
+
+    exit = instrlist_last_app(bb);
+
+    /* Find safe insertion point */
+    instrp = get_it_instr(exit);
+    instrp = instrp ? instrp : exit;
+
+    /* Extract operand, LR/SP */
+    exit_opnd = instr_get_src(exit, instr_num_srcs(exit) - 1);
+    
+    /* should be LR/SP */
+    if (!opnd_is_reg(exit_opnd))
+    {
+        DERR("Unknown exit operand\n");
+        dr_abort();
+    }
+
+    ret_src = opnd_get_reg(exit_opnd);
+    if (ret_src != DR_REG_LR && ret_src != DR_REG_SP)
+    {
+        DERR("Unknown exit reg\n");
+        dr_abort();
+    }
+
+    /* Extract predicate */
+    exit_pred = instr_get_predicate(exit);
+
+    DPRINT("FOUND PRED: %d\n", exit_pred);
+
+    if (ret_src == DR_REG_LR)
     {
         dr_insert_clean_call(drcontext, bb, instrp,
-                             bb_instrument_call_cond, false, 0);
-    }
-
-    if (instr_is_call_direct(call))
-    {
-        DPRINT("Call target: %p\n", instr_get_branch_target_pc(call));
+                             bb_instrument_exit, false, 6,
+                             opnd_create_immed_uint(0, OPSZ_1),
+                             opnd_create_reg(DR_REG_SP),
+                             opnd_create_reg(DR_REG_LR),
+                             opnd_create_immed_int(0, OPSZ_1),
+                             opnd_create_immed_int(exit_pred, OPSZ_1));
     }
     else
     {
-        call_opnd = instr_get_src(call, instr_num_srcs(call) - 1);
-        DPRINT("Call target operand: ");
-#ifdef DEBUG
-        opnd_disassemble(drcontext, call_opnd, STDOUT);
-#endif
-        DPRINT("\n");
+        /*
+         * -1 for SP, -1 for 0-indexing for -2 total.
+         * Displacement always fits in 1 byte.
+         */
+        dr_insert_clean_call(drcontext, bb, instrp,
+                             bb_instrument_exit, false, 6,
+                             opnd_create_immed_uint(1, OPSZ_1),
+                             opnd_create_reg(DR_REG_SP),
+                             opnd_create_reg(DR_REG_LR),
+                             opnd_create_immed_int((instr_num_dsts(exit) - 2) * 4,
+                                                   OPSZ_1),
+                             opnd_create_immed_int(exit_pred, OPSZ_1));
     }
 }
 
 static void
-insert_ret_instr(void *drcontext, void *tag, instrlist_t *bb)
+core_regs_weak_return(uint sp, uint lr)
 {
-    instr_t *instrp, *ret;
-    opnd_t ret_opnd, op2;
+    void *drcontext;
+    struct thread_info *tls;
 
-    ret = instrlist_last_app(bb);
+    drcontext = dr_get_current_drcontext();
+    tls = (struct thread_info *)dr_get_tls_field(drcontext);
 
-    /* Find IT block if applicable */
-    instrp = get_it_instr(drcontext, ret);
+    /* Offset from pop pc */
+    sp = sp + 4;
 
-    /* Returns are always indirect */
-    ret_opnd = instr_get_src(ret, instr_num_srcs(ret) - 1);
-    DPRINT("Return target operand: ");
-#ifdef DEBUG
-    opnd_disassemble(drcontext, ret_opnd, STDOUT);
-#endif
-    
-    /* Extract offset if sp. src should be LR or SP generally. */
-    if (opnd_get_reg(ret_opnd) == DR_REG_SP)
+    DUMP_STACK(tls);
+    DPRINT("CORE_REGS LR: 0x%x\n", lr & ~1);
+    DPRINT("CORE_REGS STACK: 0x%x\n", sp);
+
+    while (tls->shadow_count)
     {
-        /*
-         * -1 for sp and -1 for 0 indexing
-         * Assumes LDM(IA), i.e. normal push/pop behavior
-         */
-        DPRINT(" + 0x%x", (instr_num_dsts(ret) - 2) * 4);
-    }
-    DPRINT("\n");
-
-    if (!instrp)
-    {
-        if (opnd_get_reg(ret_opnd) == DR_REG_LR)
+        tls->shadow_count --;
+        if (tls->shadow_stack[tls->shadow_count].sp == sp)
         {
-            dr_insert_clean_call(drcontext, bb, ret,
-                                 bb_instrument_ret, false, 3,
-                                 opnd_create_immed_uint(0, OPSZ_4),
-                                 ret_opnd,
-                                 opnd_create_immed_uint(0, OPSZ_4));
+            tls->shadow_count++;
+            DUMP_STACK(tls);
+            return;
         }
-        else
-        {
-            /*op2 = opnd_create_base_disp(DR_REG_SP, DR_REG_NULL, 0,
-                                        (instr_num_dsts(ret) - 2) * 4, 4);*/
-            dr_insert_clean_call(drcontext, bb, ret,
-                                 bb_instrument_ret, false, 3,
-                                 opnd_create_immed_uint(1, OPSZ_4),
-                                 ret_opnd,
-                                 opnd_create_immed_uint((instr_num_dsts(ret) - 2) * 4, OPSZ_4));
-        }
-    }
-    else
-    {
-        /* Not now */
-        //dr_insert_clean_call(drcontext, bb, instrp,
-        //                     bb_instrument_ret, false, 0);
+        DPRINT("Mismatch!\n");
     }
 
+    DERR("No more food...\n");
+    dr_abort();
+}
+
+static void
+insert_core_regs_instr(void *drcontext, void *tag, instrlist_t *bb)
+{
+    dr_insert_clean_call(drcontext, bb, instrlist_last_app(bb),
+                         core_regs_weak_return, false, 2,
+                         opnd_create_reg(DR_REG_SP),
+                         opnd_create_reg(DR_REG_LR));
+}
+
+static bool
+match_crt_signature(instrlist_t *bb)
+{
+    instr_t *instrp;
+    byte *raw;
+
+    instrp = instrlist_first_app(bb);
+    raw = instr_get_raw_bits(instrp);
+
+    if (*(uint *)raw == 0xe3a0b000)
+    {
+        instrp = instr_get_next(instrp);
+        if (!instrp) return false;
+        raw = instr_get_raw_bits(instrp);
+        return *(uint *)raw == 0xe3a0e000;
+    }
+
+    if (*(uint *)raw == 0x0b00f04f)
+    {
+        instrp = instr_get_next(instrp);
+        if (!instrp) return false;
+        raw = instr_get_raw_bits(instrp);
+        return *(uint *)raw == 0x0e00f04f;
+    }
+
+    return false;
+}
+
+static void
+crt_grab_main(uint app_main)
+{
+    DPRINT("Found main at %x.\n", (app_pc)(app_main & ~1));
+    main_entry = (app_pc)(app_main & ~1);
+}
+
+static void
+insert_crt_instr(void *drcontext, void *tag, instrlist_t *bb)
+{
+    dr_insert_clean_call(drcontext, bb, instrlist_last_app(bb),
+                         crt_grab_main, false, 1,
+                         opnd_create_reg(DR_REG_R0));
+}
+
+static void
+shadow_main_sp_lr(uint sp, uint app_main_lr)
+{
+    void *drcontext;
+    struct thread_info *tls;
+
+    if (run_main) return;
+    drcontext = dr_get_current_drcontext();
+    tls = (struct thread_info *)dr_get_tls_field(drcontext);
+    tls->shadow_stack[tls->shadow_count].lr = app_main_lr & ~1;
+    tls->shadow_stack[tls->shadow_count].sp = sp;
+    tls->shadow_count++;
+    run_main = true;
+}
+
+static void
+insert_main_instr(void *drcontext, void *tag, instrlist_t *bb)
+{
+    dr_insert_clean_call(drcontext, bb, instrlist_first_app(bb),
+                         shadow_main_sp_lr, false, 2,
+                         opnd_create_reg(DR_REG_SP),
+                         opnd_create_reg(DR_REG_LR));
+}
+
+static void
+shadow_sighandler_sp_lr(uint sp, uint lr)
+{
+    void *drcontext;
+    struct thread_info *tls;
+    uint count;
+    struct frame *stack;
+
+    if (!found_main) return;
+    drcontext = dr_get_current_drcontext();
+    tls = (struct thread_info *)dr_get_tls_field(drcontext);
+    count = tls->shadow_count;
+    stack = tls->shadow_stack;
+
+    /* Small optim */
+    if (!count ||
+        stack[count - 1].lr != lr & ~1 ||
+        stack[count - 1].sp != sp)
+    {
+        stack[count].lr = lr & ~1;
+        stack[count].sp = sp;
+        tls->shadow_count++;
+    }
+}
+
+static void
+insert_entry_sighandler_instr(void *drcontext, void *tag, instrlist_t *bb)
+{
+    dr_insert_clean_call(drcontext, bb, instrlist_first_app(bb),
+                         shadow_sighandler_sp_lr, false, 2,
+                         opnd_create_reg(DR_REG_SP),
+                         opnd_create_reg(DR_REG_LR));
 }
 
 static dr_emit_flags_t
 event_bb(void *drcontext, void *tag, instrlist_t *bb,
          bool for_trace, bool translating)
 {
+    int opcode;
+    instr_t *instrp = NULL;
+    opnd_t opnd, opnd1, opnd2;
+    app_pc bb_start;
+    uint pc, i, n;
+
+    DPRINT("=========================\n");
+
     if (for_trace || translating)
     {
+        DPRINT("Skipping\n");
         return DR_EMIT_DEFAULT;
     }
 
-    DPRINT("======================\n");
-
-    if (has_call(bb))
+    if (!found_restore_core_regs)
     {
-        /* Not now */
-        //insert_call_instr(drcontext, tag, bb);
+        for (instrp = instrlist_first_app(bb); instrp;
+             instrp = instr_get_next_app(instrp))
+        {
+            /* Find restore_core_regs (C++) */
+            if (instr_get_opcode(instrp) == OP_ldm &&
+                instr_num_dsts(instrp) == 12 &&
+                opnd_get_reg(instr_get_dst(instrp, 11)) == DR_REG_R11 &&
+                opnd_get_base(instr_get_src(instrp, 0)) == DR_REG_R0)
+            {
+                DPRINT("Found restore_core_regs candidate.\n");
+
+                instrp = instrlist_last_app(bb);
+                if (instr_is_return(instrp) &&
+                    !instr_get_predicate(instrp) &&
+                    instr_get_opcode(instrp) == OP_ldm &&
+                    instr_num_dsts(instrp) == 2 &&
+                    opnd_get_base(instr_get_src(instrp, 0)) == DR_REG_SP)
+                {
+                    DPRINT("Found restore_core_regs.\n");
+                    found_restore_core_regs = true;
+                    insert_core_regs_instr(drcontext, tag, bb);
+                    goto END;
+                }
+            }
+        }
     }
-    else if (has_ret(bb))
+
+    instrp = instrlist_last_app(bb);
+    pc = (uint)instr_get_app_pc(instrp);
+
+    if (instr_is_call(instrp))
     {
-        insert_ret_instr(drcontext, tag, bb);
+        insert_entry_instr(drcontext, tag, bb, pc + instr_length(drcontext, instrp));
+    }
+    else if (instr_is_return(instrp))
+    {
+        /*
+         * ldr pc, [lr, xx] is usually not a return and is used in PLT,
+         * but passes instr_is_return.
+         * However, ldr pc, [sp], #4 is a common return when only LR is pushed.
+         */
+        opcode = instr_get_opcode(instrp);
+        if (opcode != OP_ldr)
+        {
+            insert_exit_instr(drcontext, tag, bb);
+        }
+        else if (opcode == OP_ldr)
+        {
+            if (instr_num_srcs(instrp) == 3)
+            {
+                opnd = instr_get_src(instrp, 0);
+                opnd2 = instr_get_src(instrp, 2);
+                if (opnd_is_base_disp(opnd) &&
+                    opnd_is_reg(opnd2) &&
+                    opnd_get_reg(opnd2) == DR_REG_SP)
+                {
+                    insert_exit_instr(drcontext, tag, bb);
+                }
+            }
+        }
     }
 
-#ifdef DEBUG
-    instrlist_disassemble(drcontext, tag, bb, STDOUT);
-#endif
+    /* Attempt to find main */
+    if (!main_entry)
+    {
+        /* Attempt instrumentation */
+        instrp = instrlist_last_app(bb);
+        if (match_crt_signature(bb) && instr_is_call(instrp))
+        {
+            DPRINT("Found CRT.\n");
+            insert_crt_instr(drcontext, tag, bb);
+        }
+    }
+    else if (!found_main)
+    {
+        /* Wait until main */
+        if (instr_get_app_pc(instrlist_first_app(bb)) == main_entry)
+        {
+            DPRINT("Reached main.\n");
+            found_main = true;
+            insert_main_instr(drcontext, tag, bb);
+        }
+    }
 
+    /* Instrument signal handlers */
+    bb_start = instr_get_app_pc(instrlist_first_app(bb));
+    for (i = 0; i < MAX_SIGHANDLERS; i++)
+    {
+        if (bb_start == handlers[i])
+        {
+            insert_entry_sighandler_instr(drcontext, tag, bb);
+            break;
+        }
+    }
+
+END:
     return DR_EMIT_DEFAULT;
 }
 
 static void
-event_fail(void *drcontext, void *tag, dr_mcontext_t *mcontext,
-           bool restore_memory, bool app_code_consistent)
+event_thread_init(void *drcontext)
 {
-    DPRINT("Very very bad cat!\n");
-    dr_abort();
+    struct thread_info *tls;
+
+    DPRINT("Starting thread.\n");
+    tls = (struct thread_info *)dr_thread_alloc(drcontext, sizeof(struct thread_info));
+    dr_set_tls_field(drcontext, tls);
+    tls->shadow_count = 0;
+}
+
+static void
+event_thread_exit(void *drcontext)
+{
+    struct thread_info *tls;
+
+    DPRINT("Ending thread.\n");
+    tls = (struct thread_info *)dr_get_tls_field(drcontext);
+    dr_thread_free(drcontext, tls, sizeof(struct thread_info));
 }
 
 static void
 event_exit(void)
 {
-    DPRINT("I am a cat\n");
+    DERR("I am a cat\n");
 }
+
+/***** MAIN *****/
 
 DR_EXPORT void
 dr_client_main(client_id_t id, int argc, const char *argv[])
 {
-    disassemble_set_syntax(DR_DISASM_ARM);
     dr_register_filter_syscall_event(syscall_filter);
     dr_register_pre_syscall_event(event_pre_syscall);
     dr_register_bb_event(event_bb);
-    dr_register_restore_state_event(event_fail);
+    dr_register_thread_init_event(event_thread_init);
+    dr_register_thread_exit_event(event_thread_exit);
     dr_register_exit_event(event_exit);
+
+    handlers_lock = dr_mutex_create();
 }

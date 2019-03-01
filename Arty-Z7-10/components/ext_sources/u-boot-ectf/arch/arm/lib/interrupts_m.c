@@ -45,12 +45,7 @@ int disable_interrupts(void)
 
 void dump_regs(struct autosave_regs *regs)
 {
-	printf("pc : %08lx    lr : %08lx    xPSR : %08lx\n",
-	       regs->ARM_PC, regs->ARM_LR, regs->ARM_XPSR);
-	printf("r12 : %08lx   r3 : %08lx    r2 : %08lx\n"
-		"r1 : %08lx    r0 : %08lx\n",
-		regs->ARM_R12, regs->ARM_R3, regs->ARM_R2,
-		regs->ARM_R1, regs->ARM_R0);
+    return;
 }
 
 void bad_mode(void)

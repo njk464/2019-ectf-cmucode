@@ -1,5 +1,5 @@
 CMAKE=cmake
-DYNAMORIO_DIR=/home/ubuntu/dynamorio_bin/DynamoRIO-ARM-Linux-EABIHF-7.1.0-1
+DYNAMORIO_DIR=/home/ubuntu/dynamorio_bin/HOTPATCH/build_arm
 CFIPLUGIN_OPT=-DDynamoRIO_DIR=$(DYNAMORIO_DIR)/cmake
 CFIPLUGIN_DIR=../.
 BUILD_DIR=build

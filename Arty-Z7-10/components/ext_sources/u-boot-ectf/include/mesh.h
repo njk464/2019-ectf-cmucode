@@ -8,44 +8,55 @@
 #define MAX_USERNAME_LENGTH 15
 #define MAX_PIN_LENGTH 8
 #define MAX_GAME_LENGTH 31
-#define MAX_NUM_USERS 5
+#define MAX_INT_STR_LENGTH (sizeof(int) * 2 + 3)
+#define MAX_VERSION_LENGTH MAX_INT_STR_LENGTH
+#define BASE 10
+#define MAX_NUM_USERS 32
 #define MAX_GAMES 128
 
 #define MESH_SENTINEL_LOCATION 0x00000040
-#define MESH_SENTINEL_VALUE 0x12345678
+#define MESH_SENTINEL_VALUE 0xDEADBEEF
 #define MESH_SENTINEL_LENGTH 4
 #define MESH_INSTALL_GAME_OFFSET 0x00000044
 
 #define MESH_TABLE_UNINSTALLED 0x00
 #define MESH_TABLE_INSTALLED 0x01
-#define MESH_TABLE_END 0xff
 
 #define MAX_LOGIN_ATTEMPTS 2
-#define LOGIN_TIMEOUT 1000 // 5-seconds
+#define LOGIN_TIMEOUT 5000 // 5-seconds
 #define MAX_GAMES_INSTALLED MAX_GAMES*MAX_NUM_USERS
 
 // To erase (or call update) on flash, it needs to be done
 // on boundaries of size 64K
 #define FLASH_PAGE_SIZE 65536
 
+#define MESH_TOK_BUFSIZE 64
+#define MESH_TOK_DELIM " \t\r\n\a"
+#define MESH_RL_BUFSIZE 1024
+#define MESH_SHUTDOWN -2
 
-#ifdef DEBUG
-#define debug_hex(length, string) {  \
-    for (int i=0; i<length; i++)     \
-        printf("0x%x ", string[i]);  \
-    }                                \
-    printf("\n");
-#else 
-#define debug_hex(length, string)
-#endif
+// INSTALL ERROR CODES
+#define INSTALL_INVALID_LENGTH 2
+#define INSTALL_NO_GAME_EXISTS 3
+#define INSTALL_USER_NOT_ALLOWED 4
+#define INSTALL_DOWNGRADE 5
+#define INSTALL_INSTALLED 6
+#define INSTALL_LIMIT_REACHED 7
+#define INSTALL_INVALID_SIGNATURE 8
+#define INSTALL_UNKNOWN_ERROR -1
 
-
-
+/**
+ * @brief struct used to store the username and pin
+ */
 typedef struct {
     char name[MAX_USERNAME_LENGTH + 1];
     char pin[MAX_PIN_LENGTH + 1];
 } User;
 
+/**
+ * @brief struct used to store game information
+ *        after reading a game header
+ */
 typedef struct game {
     char name[MAX_GAME_LENGTH + 1];
     unsigned int major_version;
@@ -54,8 +65,11 @@ typedef struct game {
     int num_users;
 } Game;
 
+/**
+ * @brief struct used to represent an installed game table entry
+ */
 struct games_tbl_row {
-    char install_flag; // 00 no longer installed, 01 installed, ff end
+    char install_flag; // 00 no longer installed, 01 installed
     char game_name[MAX_GAME_LENGTH + 1];
     unsigned int major_version;
     unsigned int minor_version;
@@ -86,8 +100,9 @@ void full_name_from_short_name(char* full_name, struct games_tbl_row* row);
 void *safe_malloc(size_t size);
 void *safe_calloc(size_t nitems, size_t size);
 void *safe_realloc(void *ptr, size_t size);
-void mesh_get_install_table();
-void mesh_write_install_table();
+void safe_free(void** ptr, size_t size);
+void mesh_get_install_table(void);
+void mesh_write_install_table(void);
 
 /*
     Ext 4 functions
