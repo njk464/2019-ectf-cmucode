@@ -142,6 +142,10 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
     char *end_game_name;
     char *start_name;
     char *signed_ciphertext;
+    char *temp_pointer;
+    char *major_version_str;
+    char *minor_version_str;
+    char *full_name;
 
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
@@ -181,10 +185,10 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         end_game_name = decrypted_header - 1; // This is -1 because I don't want to include the newline
 
         // get everything up to the first '.'. That's the major version
-        char *temp_pointer = game_version;
+        temp_pointer = game_version;
         // get after the '.'. That's the minor version
-        char* major_version_str = strsep(&temp_pointer, ".");
-        char* minor_version_str = strsep(&temp_pointer, "\n");
+        major_version_str = strsep(&temp_pointer, ".");
+        minor_version_str = strsep(&temp_pointer, "\n");
 
         game->major_version = simple_strtoul(major_version_str, NULL, MAX_VERSION_LENGTH);
         game->minor_version = simple_strtoul(minor_version_str, NULL, MAX_VERSION_LENGTH);
@@ -193,9 +197,10 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         game->name[end_game_name - parsed_game_name] = '\0';
 
         // compare the header to provided name
-        char* full_name = (char*) safe_malloc(MAX_GAME_LENGTH + 1);
+         full_name = (char*) safe_malloc(MAX_GAME_LENGTH + 1);
         if(snprintf(full_name, MAX_GAME_LENGTH + 1, "%s-v%d.%d", game->name, game->major_version, game->minor_version) <=0){
             printf("Game header data corrupted.");
+            safe_free(full_name, MAX_GAME_LENGTH + 1);
             return -1;
         } 
         if (strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0){
@@ -252,6 +257,8 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
  */
 int crypto_get_game(char *game_binary, char *game_name, User* user){
     int num_users = 0;
+    int major_version;
+    int minor_version;
     int flag = 0;
     loff_t unverified_len;
     loff_t verified_len;
@@ -283,6 +290,11 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
     char *message;
     char *encrypted_game;
     char *signed_ciphertext;
+    char *temp_pointer;
+    char *major_version_str;
+    char *minor_version_str;
+    char *name; 
+    char *full_name;
 
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
@@ -332,29 +344,33 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         end_game_name = decrypted_header - 1; 
 
         // get everything up to the first '.'. That's the major version
-        char *temp_pointer = game_version;
+        temp_pointer = game_version;
         // get after the '.'. That's the minor version
-        char* major_version_str = strsep(&temp_pointer, ".");
-        char* minor_version_str = strsep(&temp_pointer, "\n");
+        major_version_str = strsep(&temp_pointer, ".");
+        minor_version_str = strsep(&temp_pointer, "\n");
 
-        int major_version = simple_strtoul(major_version_str, NULL, MAX_VERSION_LENGTH);
-        int minor_version = simple_strtoul(minor_version_str, NULL, MAX_VERSION_LENGTH);
+        major_version = simple_strtoul(major_version_str, NULL, MAX_VERSION_LENGTH);
+        minor_version = simple_strtoul(minor_version_str, NULL, MAX_VERSION_LENGTH);
 
-        char * name = safe_malloc((end_game_name - parsed_game_name)+1);
+        name = safe_malloc((end_game_name - parsed_game_name)+1);
         memcpy(name, parsed_game_name, end_game_name - parsed_game_name);
         name[end_game_name - parsed_game_name] = '\0';
 
         // compare the header to provided name
-        char* full_name = (char*) safe_malloc(MAX_GAME_LENGTH + 1);
+        full_name = (char*) safe_malloc(MAX_GAME_LENGTH + 1);
         if(snprintf(full_name, MAX_GAME_LENGTH + 1, "%s-v%s.%s", name, major_version_str, minor_version_str) <=0){
             printf("Game header data corrupted.");
+            safe_free(name, (end_game_name - parsed_game_name) + 1);
+            safe_free(full_name, MAX_GAME_LENGTH + 1);
             return -1;
         } 
         if (strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0){
+            safe_free(name, (end_game_name - parsed_game_name) + 1);
             printf("Header data and file name do not match.");
             safe_free(full_name, MAX_GAME_LENGTH + 1);
             return -1;
         }
+        safe_free(name, (end_game_name - parsed_game_name) + 1);
         safe_free(full_name, MAX_GAME_LENGTH + 1);
 
         start_name = decrypted_header; 
