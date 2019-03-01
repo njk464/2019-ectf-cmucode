@@ -159,6 +159,12 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
     verified_len = unverified_len -  crypto_sign_BYTES;
     verified_ciphertext = safe_malloc(verified_len);
 
+    if (unverified_len > MAX_GAME_SIZE) {
+        printf("dROP it like it's hot\n");
+        return_value = -1;
+        goto free_and_return;
+    }
+
     // read the game into a buffer
     signed_ciphertext = (char*) safe_malloc(unverified_len);
     mesh_read_ext4(game_name, signed_ciphertext, unverified_len);

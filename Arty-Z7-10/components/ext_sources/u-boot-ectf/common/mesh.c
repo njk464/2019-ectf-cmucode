@@ -722,6 +722,7 @@ int mesh_ls_iterate_dir(struct ext2fs_node *dir, char *fname)
     unsigned int game_num = 1;
     int status;
     loff_t actread;
+    loff_t chk;
     struct ext2fs_node *diro = (struct ext2fs_node *) dir;
 
     if (!diro->inode_read) {
@@ -820,8 +821,10 @@ int mesh_ls_iterate_dir(struct ext2fs_node *dir, char *fname)
                 switch (type) {
                 case FILETYPE_REG:
                     // only print name if the user is in valid install list
-                    // mesh_get_game_header(&game, filename);
-                    crypto_get_game_header(&game, filename);
+                    chk = crypto_get_game_header(&game, filename);
+                    if (chk == -1) {
+                        mesh_shutdown(NULL);
+                    }
                     
                     if (mesh_check_user(&game)){
                         printf("%d      ", game_num++);
