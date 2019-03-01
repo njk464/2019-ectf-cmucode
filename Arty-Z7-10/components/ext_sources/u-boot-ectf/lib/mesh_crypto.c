@@ -2,41 +2,6 @@
 #include <malloc.h>
 #include <stdlib.h>
 
-
-/*
- * @brief Clears memory before freeing
- *
- * @params ptr A pointer to the memory to free
- * @params size The size of the memory to be freed
- * @return void
- */
-void safe_free(void* ptr, size_t size){
-    memset(ptr, 0, size);
-    free(ptr);
-    ptr = NULL;
-}
-
-/*
- * @brief TODO: This is a debug function
- *              It prints out memory in hex for easy debugging
- * @params ptr A pointer to the data
- * @params len The len of the data
- * @return void
- */
-void print_hex(unsigned char *ptr, unsigned int len) {
-    int i;
-    int first = 1;
-    for (i = 0; i <= len; i++) {
-        if(first) {
-            printf("0x%02x", ptr[i]);
-            first = 0; 
-        } else {
-            printf(",0x%02x", ptr[i]);
-        }
-    }
-    printf("\n");
-}
-
 /*
  * @brief Given a username, read the salt from secret.h
  *
@@ -50,7 +15,6 @@ char *get_salt(char *username){
             return salt[i];
         }
     }
-    printf("Salt not found\n");
     return NULL;
 }
 
@@ -236,8 +200,11 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         } 
         if (strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0){
             printf("Header data and file name do not match.");
+            safe_free(full_name, MAX_GAME_LENGTH + 1);
             return -1;
         }
+        safe_free(full_name, MAX_GAME_LENGTH + 1);
+        
         start_name = decrypted_header; 
         // loop though the header
         while((decrypted_header = strstr(decrypted_header," ")) != NULL ){
@@ -321,8 +288,6 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         printf("Error in Crypto Library\n");
         return -1;
     }
-
-
     
     // get the size of the game
     unverified_len = mesh_size_ext4(game_name);
@@ -387,8 +352,10 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         } 
         if (strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0){
             printf("Header data and file name do not match.");
+            safe_free(full_name, MAX_GAME_LENGTH + 1);
             return -1;
         }
+        safe_free(full_name, MAX_GAME_LENGTH + 1);
 
         start_name = decrypted_header; 
         // loop though the header ensure extract encrypted game key + nonce

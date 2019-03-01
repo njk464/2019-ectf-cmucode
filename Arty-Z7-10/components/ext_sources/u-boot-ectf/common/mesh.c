@@ -84,7 +84,7 @@ int mesh_init_table(void)
         mesh_write_install_table();
         ret = 0;
     }
-    free(sentinel);
+    safe_free(sentinel, sizeof(char) * MESH_SENTINEL_LENGTH);
     return ret;
 }
 
@@ -202,8 +202,8 @@ int mesh_flash_write(void* data, unsigned int flash_location, unsigned int flash
                               (const unsigned char*) cipher_text,
                               (const unsigned char*) flash_key)) == -1)
         {
-            free(cipher_text);
-            free(plain_text);
+            safe_free(cipher_text, FLASH_PAGE_SIZE);
+            safe_free(plain_text, FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
             printf("Flash write failed: unable to encrypt the install table \n");
             return -1;
         }
@@ -213,8 +213,8 @@ int mesh_flash_write(void* data, unsigned int flash_location, unsigned int flash
         data += end_offset - current_offset;
     }
    
-    free(cipher_text);
-    free(plain_text);
+    safe_free(cipher_text, FLASH_PAGE_SIZE);
+    safe_free(plain_text, FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
    
     return 0;
 }
@@ -238,7 +238,6 @@ int mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_
     // malloc space to hold an entire page
     char* cipher_text = safe_calloc(1, sizeof(char) * FLASH_PAGE_SIZE);
     char* plain_text  = safe_calloc(1, sizeof(char) * FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
-
     
     unsigned int new_offset = flash_location; 
     while (new_offset - flash_location < flash_length) {
@@ -254,8 +253,8 @@ int mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_
                          (const unsigned char*) cipher_text,
                          (const unsigned char*) flash_key) == -1)
         {
-            free(cipher_text);
-            free(plain_text);
+            safe_free(cipher_text, sizeof(char) * FLASH_PAGE_SIZE);
+            safe_free(plain_text, sizeof(char) * FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
             return -1;
         }
 
@@ -274,8 +273,8 @@ int mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_
         data += end_offset - current_offset;
     }
 
-    free(cipher_text);
-    free(plain_text);
+    safe_free(cipher_text, sizeof(char) * FLASH_PAGE_SIZE);
+    safe_free(plain_text, sizeof(char) * FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
 
     return 0;
 }
@@ -392,7 +391,7 @@ int mesh_play(char **args)
 
     Game game;
     loff_t size = 0;
-    // mesh_get_game_header(&game, args[1]);
+    
     if((size = crypto_get_game_header(&game, args[1])) == -1) {
         return 0;
     }
@@ -419,22 +418,19 @@ int mesh_play(char **args)
     cmd_tbl_t* mem_write_tp = find_cmd("mw.l");
     mem_write_tp->cmd(mem_write_tp, 0, 3, mw_argv);
 
-
     char *from_str = (char *)safe_malloc(MAX_INT_STR_LENGTH);
     if (sprintf(from_str, "0x%p", (void *) game_binary) < 0) {
         mesh_shutdown(NULL);
     }
+    
     char * const cp_argv[4] = { "cp", from_str, "0x1fc00040",  size_str };
     cmd_tbl_t* cp_tp = find_cmd("cp");
     cp_tp->cmd(cp_tp, 0, 4, cp_argv);
 
-
-
     // cleanup - this is here because boot may not execute following commands
-    free(from_str);
-    free(size_str);
-    memset(game_binary, 0, size);
-    free(game_binary);
+    safe_free(from_str, MAX_INT_STR_LENGTH);
+    safe_free(size_str, MAX_INT_STR_LENGTH);
+    safe_free(game_binary, size);
     
     // boot petalinux
     char * const boot_argv[2] = { "bootm", "0x10000000"};
@@ -564,26 +560,30 @@ int mesh_uninstall(char **args)
 
     struct games_tbl_row *row;
     unsigned int index = 0;
+    size_t malloced_size = 0;
 
     printf("Uninstalling %s for %s...\n", args[1], user.name);
     for(; index < installed_games_size; index++)
     {
         row = &installed_games[index];
         // the most space that we could need to store the full game name
-        char* full_name = (char*) safe_malloc(snprintf(NULL, 0, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version) + 1);
-        full_name_from_short_name(full_name, row);
+        malloced_size = snprintf(NULL, 0, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version) + 1;      
+        if (malloced_size > 0) {
+            char* full_name = (char*) safe_malloc(malloced_size);
+            full_name_from_short_name(full_name, row);
 
-        if (strcmp(row->user_name, user.name) == 0 &&
-            strcmp(full_name, args[1]) == 0 &&
-            row->install_flag == MESH_TABLE_INSTALLED)
-        {
-            row->install_flag = MESH_TABLE_UNINSTALLED;
-            mesh_write_install_table();
-            printf("%s was successfully uninstalled for %s\n", args[1], user.name);
-            free(full_name);
-            break;
+            if (strcmp(row->user_name, user.name) == 0 &&
+                strcmp(full_name, args[1]) == 0 &&
+                row->install_flag == MESH_TABLE_INSTALLED)
+            {
+                row->install_flag = MESH_TABLE_UNINSTALLED;
+                mesh_write_install_table();
+                printf("%s was successfully uninstalled for %s\n", args[1], user.name);
+                safe_free(full_name, malloced_size);
+                break;
+            }
+            safe_free(full_name, malloced_size);
         }
-        free(full_name);
     }
 
     return 0;
@@ -680,9 +680,9 @@ void mesh_loop(void) {
 
             args = mesh_split_line(line);
             status = mesh_execute(args);
-            free(args);
+            safe_free(args, sizeof(char*) * MESH_TOK_BUFSIZE);
 
-            free(line);
+            safe_free(line, sizeof(char) * MAX_STR_LEN);
 
             // -2 for exit
             if (status == MESH_SHUTDOWN)
@@ -781,7 +781,7 @@ int mesh_ls_iterate_dir(struct ext2fs_node *dir, char *fname)
                                (dirent.inode),
                                &fdiro->inode);
                 if (status == 0) {
-                    free(fdiro);
+                    safe_free(fdiro, sizeof(struct ext2fs_node));
                     return 0;
                 }
                 fdiro->inode_read = 1;
@@ -812,7 +812,7 @@ int mesh_ls_iterate_dir(struct ext2fs_node *dir, char *fname)
                                  dirent.inode),
                                  &fdiro->inode);
                     if (status == 0) {
-                        free(fdiro);
+                        safe_free(fdiro, sizeof(struct ext2fs_node));
                         return 0;
                     }
                     fdiro->inode_read = 1;
@@ -833,7 +833,7 @@ int mesh_ls_iterate_dir(struct ext2fs_node *dir, char *fname)
                     break;
                 }
             }
-            free(fdiro);
+            safe_free(fdiro, sizeof(struct ext2fs_node));
         }
         fpos += le16_to_cpu(dirent.direntlen);
     }
@@ -1003,6 +1003,19 @@ void *safe_realloc(void *ptr, size_t size){
     return p;
 }
 
+/*
+ * @brief Clears memory before freeing
+ *
+ * @params ptr A pointer to the memory to free
+ * @params size The size of the memory to be freed
+ * @return void
+ */
+void safe_free(void* ptr, size_t size){
+    memset(ptr, 0, size);
+    free(ptr);
+    ptr = NULL;
+}
+
 /**
  * @brief gets the full_game_name from an install record
  * 
@@ -1027,24 +1040,28 @@ void full_name_from_short_name(char* full_name, struct games_tbl_row* row)
 int mesh_game_installed(char *game_name){
     struct games_tbl_row *row;
     unsigned int index = 0;
+    size_t malloced_size = 0;
 
     // loop through install table until table end is found
     for(; index < installed_games_size; index++)
     {
         row = &installed_games[index];
         // the most space that we could need to store the full game name
-        char* full_name = (char*) safe_malloc(snprintf(NULL, 0, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version) + 1);
-        full_name_from_short_name(full_name, row);
+        malloced_size = snprintf(NULL, 0, "%s-v%d.%d", row->game_name, row->major_version, row->minor_version) + 1;      
+        if (malloced_size > 0){
+            char* full_name = (char*) safe_malloc(malloced_size);
+            full_name_from_short_name(full_name, row);
 
-        // check if game is installed and if it is for the specified user.
-        if (strcmp(game_name, full_name) == 0 &&
-            strcmp(user.name, row->user_name) == 0 &&
-            row->install_flag == MESH_TABLE_INSTALLED)
-        {
-            free(full_name);
-            return 1;
+            // check if game is installed and if it is for the specified user.
+            if (strcmp(game_name, full_name) == 0 &&
+                strcmp(user.name, row->user_name) == 0 &&
+                row->install_flag == MESH_TABLE_INSTALLED)
+            {
+                safe_free(full_name, malloced_size);
+                return 1;
+            }
+            safe_free(full_name, malloced_size);
         }
-        free(full_name);
     }
 
     return 0;
@@ -1173,7 +1190,6 @@ int mesh_check_downgrade(char *game_name, unsigned int major_version, unsigned i
     }
     return return_value;
 }
-
 
 /**
  * @brief checks if a game_name can be installed.
@@ -1353,7 +1369,7 @@ int mesh_is_first_table_write(void)
     {
         ret = 1;
     }
-    free(sentinel);
+    safe_free(sentinel, sizeof(char) * MESH_SENTINEL_LENGTH);
     return ret;
 }
 
@@ -1491,7 +1507,7 @@ char **mesh_split_line(char *line) {
             tokens_backup = tokens;
             tokens = safe_realloc(tokens, bufsize * sizeof(char*));
             if (!tokens) {
-                free(tokens_backup);
+                safe_free(tokens_backup, bufsize * sizeof(char*));
             }
         }
 
@@ -1535,7 +1551,7 @@ void mesh_get_install_table(void)
                          sizeof(struct games_tbl_row) * installed_games_size);
         if (ret) {
             installed_games_size = 0;
-            free(installed_games);
+            safe_free(installed_games, sizeof(struct games_tbl_row) * installed_games_size);
             mesh_init_table();
         }
     }
@@ -1557,7 +1573,7 @@ void mesh_write_install_table(void)
         memcpy(write_buffer+sizeof(unsigned int)*2, installed_games, installed_games_size*sizeof(struct games_tbl_row));
     }
     mesh_flash_write(write_buffer, MESH_SENTINEL_LOCATION, write_size);
-    free(write_buffer);
+    safe_free(write_buffer, write_size);
 }
 
 
@@ -1598,8 +1614,8 @@ int mesh_login(User *user) {
         printf("Login failed. Please try again\n");
     }
 
-    free(tmp_name);
-    free(tmp_pin);
+    safe_free(tmp_name, sizeof(char) * MAX_STR_LEN);
+    safe_free(tmp_pin, sizeof(char) * MAX_STR_LEN);
 
     return retval;
 }
