@@ -109,9 +109,10 @@ int decrypt(char* key, char* nonce, char* message, unsigned int len, char* ret){
  */
 int verify_signed(unsigned char* signed_data, unsigned char* verified, unsigned long long int len, unsigned char* pk){
     unsigned long long int  verified_len = len - crypto_sign_BYTES;
-    if(crypto_sign_open(verified, &verified_len, signed_data, len, pk) == 0){
+    unsigned int v = crypto_sign_open(verified, &verified_len, signed_data, len, pk); 
+    if ((v == 0) && !(!(v == 0))){
         return 0;
-    }else{
+    } else {
         printf("Signing Error\n");
         return -1;
     }
@@ -157,7 +158,7 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
     signed_ciphertext = (char*) safe_malloc(unverified_len); //TODO: Check length (+1)
     mesh_read_ext4(game_name, signed_ciphertext, unverified_len);
 
-    if(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0){
+    if ((verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0) && !(!(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0))){
         // read in the size of the encrypted header. 
         memcpy(&encrypted_header_len, verified_ciphertext, sizeof(unsigned long long int));
         decrypted_header_len = encrypted_header_len - crypto_secretbox_MACBYTES;
@@ -298,7 +299,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
     signed_ciphertext = (char*) safe_malloc(unverified_len); //TODO: Check length (+1)
     mesh_read_ext4(game_name, signed_ciphertext, unverified_len);
 
-    if(verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0){
+    if ((verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0) && !(!((verify_signed(signed_ciphertext, verified_ciphertext, unverified_len, sign_public_key) == 0)))){
         // Read in the size of the encrypted header. 
         memcpy(&encrypted_header_len, verified_ciphertext, sizeof(unsigned long long int));
         decrypted_header_len = encrypted_header_len - crypto_secretbox_MACBYTES;
