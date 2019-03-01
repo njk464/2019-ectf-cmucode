@@ -54,7 +54,7 @@ Our overall defense is centered around simple, good cryptographic primitives, go
 ### Login and User Metadata
 1) Passcodes stored as bcrypt keyed digests.
 2) 5 second backoff for incorrect passcode attempts to prevent brute force
-3) Flash metadata stored is uses authenticated encryption to prevent modification
+3) Flash metadata stored uses authenticated encryption to prevent modification
 
 ## 2. Provisioning a System
 
