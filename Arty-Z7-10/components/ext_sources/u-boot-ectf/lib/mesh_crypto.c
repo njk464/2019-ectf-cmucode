@@ -77,8 +77,8 @@ int decrypt(char* key, char* nonce, char* message, unsigned int len, char* ret){
     // decrypt the provided ciphertext
     if (crypto_secretbox_open(padded_plaintext, padded_ciphertext, padded_len, nonce, key) == -1){
         printf("Decrypt Fail\n");
-        safe_free(padded_plaintext, padded_len);
-        safe_free(padded_ciphertext, padded_len);
+        safe_free(&padded_plaintext, padded_len);
+        safe_free(&padded_ciphertext, padded_len);
         return -1;
     } else {
         plaintext = safe_malloc(plaintext_len);
@@ -91,9 +91,9 @@ int decrypt(char* key, char* nonce, char* message, unsigned int len, char* ret){
         }
         // copy data to return location
         memcpy(ret, plaintext, plaintext_len);
-        safe_free(plaintext, plaintext_len);
-        safe_free(padded_plaintext, padded_len);
-        safe_free(padded_ciphertext, padded_len);
+        safe_free(&plaintext, plaintext_len);
+        safe_free(&padded_plaintext, padded_len);
+        safe_free(&padded_ciphertext, padded_len);
         return 0;
     }
 }
@@ -128,25 +128,31 @@ int verify_signed(unsigned char* signed_data, unsigned char* verified, unsigned 
  */
 loff_t crypto_get_game_header(Game *game, char *game_name){
     int num_users = 0;
+    int return_value = -1;
     loff_t unverified_len;
     loff_t verified_len;
     loff_t decrypted_game_len;
     loff_t encrypted_header_len;
     loff_t decrypted_header_len;
-    char *verified_ciphertext;
     char header_nonce[crypto_secretbox_NONCEBYTES];
-    char *encrypted_header;
-    char *original_decrypted_header;
-    char *decrypted_header;
-    char *game_version;
-    char *parsed_game_name;
-    char *end_game_name;
-    char *start_name;
-    char *signed_ciphertext;
+    char *verified_ciphertext = NULL;
+    char *encrypted_header = NULL;
+    char *original_decrypted_header = NULL;
+    char *decrypted_header = NULL;
+    char *game_version = NULL;
+    char *parsed_game_name = NULL;
+    char *end_game_name = NULL;
+    char *start_name = NULL;
+    char *signed_ciphertext = NULL;
+    char *temp_pointer = NULL;
+    char *major_version_str = NULL;
+    char *minor_version_str = NULL;
+    char *full_name = NULL;
 
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
-        return -1;
+        return_value = -1;
+        goto free_and_return;
     }
     
     // get the size of the game
@@ -182,10 +188,10 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         end_game_name = decrypted_header - 1; // This is -1 because I don't want to include the newline
 
         // get everything up to the first '.'. That's the major version
-        char *temp_pointer = game_version;
+        temp_pointer = game_version;
         // get after the '.'. That's the minor version
-        char* major_version_str = strsep(&temp_pointer, ".");
-        char* minor_version_str = strsep(&temp_pointer, "\n");
+        major_version_str = strsep(&temp_pointer, ".");
+        minor_version_str = strsep(&temp_pointer, "\n");
 
         game->major_version = simple_strtoul(major_version_str, NULL, MAX_VERSION_LENGTH);
         game->minor_version = simple_strtoul(minor_version_str, NULL, MAX_VERSION_LENGTH);
@@ -194,28 +200,25 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         game->name[end_game_name - parsed_game_name] = '\0';
 
         // compare the header to provided name
-        char* full_name = (char*) safe_malloc(MAX_GAME_LENGTH + 1);
+         full_name = (char*) safe_malloc(MAX_GAME_LENGTH + 1);
         if(snprintf(full_name, MAX_GAME_LENGTH + 1, "%s-v%d.%d", game->name, game->major_version, game->minor_version) <=0){
             printf("Game header data corrupted.");
-            return -1;
+            return_value = -1;
+            goto free_and_return;
         } 
         if ((strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0) && !(!(strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0))) {
             printf("Header data and file name do not match.");
-            safe_free(full_name, MAX_GAME_LENGTH + 1);
-            return -1;
+            return_value = -1;
+            goto free_and_return;
         }
-        safe_free(full_name, MAX_GAME_LENGTH + 1);
         
         start_name = decrypted_header; 
         // loop though the header
         while((decrypted_header = strstr(decrypted_header," ")) != NULL ){
             if(num_users > MAX_NUM_USERS) {
                 printf("Max users reached\n");
-                safe_free(encrypted_header, encrypted_header_len);
-                safe_free(original_decrypted_header, decrypted_header_len);
-                safe_free(verified_ciphertext, verified_len);
-                safe_free(signed_ciphertext, unverified_len);
-                return -1;
+                return_value = -1;
+                goto free_and_return;
             }
             char* end_name = decrypted_header; 
             decrypted_header++; // bypass space
@@ -230,16 +233,20 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
         }
         // store reaminder of data before exiting
         game->num_users = num_users;
-        safe_free(encrypted_header, encrypted_header_len);
-        safe_free(original_decrypted_header, decrypted_header_len);
     } else {
         printf("Sign check fail\n");
-        safe_free(verified_ciphertext, verified_len);
-        safe_free(signed_ciphertext, unverified_len);
-        return -1;
+        return_value = -1;
+        goto free_and_return;
     }
-    safe_free(verified_ciphertext, verified_len);
-    safe_free(signed_ciphertext, unverified_len);
+
+    return_value = decrypted_game_len;
+
+    free_and_return:
+    safe_free(&full_name, MAX_GAME_LENGTH + 1);
+    safe_free(&encrypted_header, encrypted_header_len);
+    safe_free(&original_decrypted_header, decrypted_header_len);
+    safe_free(&verified_ciphertext, verified_len);
+    safe_free(&signed_ciphertext, unverified_len);
     return decrypted_game_len;
 }
 
@@ -253,7 +260,10 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
  */
 int crypto_get_game(char *game_binary, char *game_name, User* user){
     int num_users = 0;
+    int major_version;
+    int minor_version;
     int flag = 0;
+    int return_value = -1;
     loff_t unverified_len;
     loff_t verified_len;
     loff_t decrypted_game_len;
@@ -272,22 +282,28 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
     char gamenonce[crypto_secretbox_NONCEBYTES];
     char encrypted_gamekeynonce[encrypted_gamekeynonce_len];
     char gamekey_nonce[crypto_secretbox_NONCEBYTES + crypto_secretbox_KEYBYTES];
-    char *verified_ciphertext;
-    char *encrypted_header;
-    char *original_decrypted_header;
-    char *decrypted_header;
-    char *game_version;
-    char *parsed_game_name;
-    char *end_game_name;
-    char *start_name;
-    char *enc_header_start;
-    char *message;
-    char *encrypted_game;
-    char *signed_ciphertext;
+    char *verified_ciphertext = NULL;
+    char *encrypted_header = NULL;
+    char *original_decrypted_header = NULL;
+    char *decrypted_header = NULL;
+    char *game_version = NULL;
+    char *parsed_game_name = NULL;
+    char *end_game_name = NULL;
+    char *start_name = NULL;
+    char *enc_header_start = NULL;
+    char *message = NULL;
+    char *encrypted_game = NULL;
+    char *signed_ciphertext = NULL;
+    char *temp_pointer = NULL;
+    char *major_version_str = NULL;
+    char *minor_version_str = NULL;
+    char *name = NULL;
+    char *full_name = NULL;
 
     if (sodium_init() < 0) {
         printf("Error in Crypto Library\n");
-        return -1;
+        return_value = -1;
+        goto free_and_return;
     }
     
     // get the size of the game
@@ -316,11 +332,8 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         decrypted_header = safe_malloc(decrypted_header_len); 
         original_decrypted_header = decrypted_header;
         if(decrypt(header_key, header_nonce, encrypted_header, encrypted_header_len, decrypted_header) == -1){
-            safe_free(encrypted_header, encrypted_header_len);
-            safe_free(original_decrypted_header, decrypted_header_len);
-            safe_free(verified_ciphertext, verified_len);
-            safe_free(signed_ciphertext, unverified_len);
-            return -1;
+            return_value = -1;
+            goto free_and_return;
         }
 
         // get the length of the game, which is the verified len - the 
@@ -333,41 +346,39 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
         end_game_name = decrypted_header - 1; 
 
         // get everything up to the first '.'. That's the major version
-        char *temp_pointer = game_version;
+        temp_pointer = game_version;
         // get after the '.'. That's the minor version
-        char* major_version_str = strsep(&temp_pointer, ".");
-        char* minor_version_str = strsep(&temp_pointer, "\n");
+        major_version_str = strsep(&temp_pointer, ".");
+        minor_version_str = strsep(&temp_pointer, "\n");
 
-        int major_version = simple_strtoul(major_version_str, NULL, MAX_VERSION_LENGTH);
-        int minor_version = simple_strtoul(minor_version_str, NULL, MAX_VERSION_LENGTH);
+        major_version = simple_strtoul(major_version_str, NULL, MAX_VERSION_LENGTH);
+        minor_version = simple_strtoul(minor_version_str, NULL, MAX_VERSION_LENGTH);
 
-        char * name = safe_malloc((end_game_name - parsed_game_name)+1);
+        name = safe_malloc((end_game_name - parsed_game_name)+1);
         memcpy(name, parsed_game_name, end_game_name - parsed_game_name);
         name[end_game_name - parsed_game_name] = '\0';
 
         // compare the header to provided name
-        char* full_name = (char*) safe_malloc(MAX_GAME_LENGTH + 1);
+        full_name = (char*) safe_malloc(MAX_GAME_LENGTH + 1);
         if(snprintf(full_name, MAX_GAME_LENGTH + 1, "%s-v%s.%s", name, major_version_str, minor_version_str) <=0){
             printf("Game header data corrupted.");
-            return -1;
+            return_value = -1;
+            goto free_and_return;
         } 
         if ((strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0) && !(!(strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0))) {
             printf("Header data and file name do not match.");
-            safe_free(full_name, MAX_GAME_LENGTH + 1);
-            return -1;
+            return_value = -1;
+            goto free_and_return;
         }
-        safe_free(full_name, MAX_GAME_LENGTH + 1);
+        safe_free(&name, (end_game_name - parsed_game_name) + 1);
 
         start_name = decrypted_header; 
         // loop though the header ensure extract encrypted game key + nonce
         while((decrypted_header = strstr(decrypted_header," ")) != NULL ){
             if(num_users > MAX_NUM_USERS) {
                 printf("Max users reached\n");
-                safe_free(encrypted_header, encrypted_header_len);
-                safe_free(original_decrypted_header, decrypted_header_len);
-                safe_free(verified_ciphertext, verified_len);
-                safe_free(signed_ciphertext, unverified_len);
-                return -1;
+                return_value = -1;
+                goto free_and_return;
             }
             char* end_name = decrypted_header; 
             decrypted_header++; // bypass space
@@ -391,11 +402,8 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
 
              // decrypt the gamekeynonce
             if(decrypt(user_key, user_nonce, encrypted_gamekeynonce, encrypted_gamekeynonce_len, gamekey_nonce) == -1){
-                safe_free(encrypted_header, encrypted_header_len);
-                safe_free(original_decrypted_header, decrypted_header_len);
-                safe_free(verified_ciphertext, verified_len);
-                safe_free(signed_ciphertext, unverified_len);
-                return -1;
+                return_value = -1;
+                goto free_and_return;
             }
             memcpy(gamekey, gamekey_nonce, crypto_secretbox_KEYBYTES);
             memcpy(gamenonce, gamekey_nonce + crypto_secretbox_KEYBYTES, crypto_secretbox_NONCEBYTES);
@@ -405,29 +413,28 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
             memcpy(encrypted_game, enc_header_start + encrypted_header_len, encrypted_game_len);
             // decrypt and store the game. 
             if(decrypt(gamekey, gamenonce, encrypted_game, encrypted_game_len, game_binary) == -1){ 
-                safe_free(encrypted_header, encrypted_header_len);
-                safe_free(original_decrypted_header, decrypted_header_len);
-                safe_free(encrypted_game, encrypted_game_len);
-                safe_free(verified_ciphertext, verified_len);
-                safe_free(signed_ciphertext, unverified_len);
-                return -1;
+                return_value = -1;
+                goto free_and_return;
             }
-            safe_free(encrypted_header, encrypted_header_len);
-            safe_free(original_decrypted_header, decrypted_header_len);
-            safe_free(encrypted_game, encrypted_game_len);
         }else{
             printf("User cannot play game.\n");
-            safe_free(signed_ciphertext, unverified_len);
-            safe_free(verified_ciphertext, verified_len);
-            return -1;
+            return_value = -1;
+            goto free_and_return;
         }
     } else {
         printf("Sign check fail\n");
-        safe_free(verified_ciphertext, verified_len);
-        safe_free(signed_ciphertext, unverified_len);
-        return -1;
+        return_value = -1;
+        goto free_and_return;
     }
-    safe_free(signed_ciphertext, unverified_len);
-    safe_free(verified_ciphertext, verified_len);
-    return 1; // good return
+
+    return_value = 1;
+
+    free_and_return:
+    safe_free(&name, (end_game_name - parsed_game_name) + 1);
+    safe_free(&encrypted_header, encrypted_header_len);
+    safe_free(&original_decrypted_header, decrypted_header_len);
+    safe_free(&encrypted_game, encrypted_game_len);
+    safe_free(&verified_ciphertext, verified_len);
+    safe_free(&signed_ciphertext, unverified_len);
+    return return_value; // good return
 }

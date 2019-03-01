@@ -84,7 +84,7 @@ int mesh_init_table(void)
         mesh_write_install_table();
         ret = 0;
     }
-    safe_free(sentinel, sizeof(char) * MESH_SENTINEL_LENGTH);
+    safe_free(&sentinel, sizeof(char) * MESH_SENTINEL_LENGTH);
     return ret;
 }
 
@@ -202,8 +202,8 @@ int mesh_flash_write(void* data, unsigned int flash_location, unsigned int flash
                               (const unsigned char*) cipher_text,
                               (const unsigned char*) flash_key)) == -1)
         {
-            safe_free(cipher_text, FLASH_PAGE_SIZE);
-            safe_free(plain_text, FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
+            safe_free(&cipher_text, FLASH_PAGE_SIZE);
+            safe_free(&plain_text, FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
             printf("Flash write failed: unable to encrypt the install table \n");
             return -1;
         }
@@ -213,8 +213,8 @@ int mesh_flash_write(void* data, unsigned int flash_location, unsigned int flash
         data += end_offset - current_offset;
     }
    
-    safe_free(cipher_text, FLASH_PAGE_SIZE);
-    safe_free(plain_text, FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
+    safe_free(&cipher_text, FLASH_PAGE_SIZE);
+    safe_free(&plain_text, FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
    
     return 0;
 }
@@ -253,8 +253,8 @@ int mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_
                          (const unsigned char*) cipher_text,
                          (const unsigned char*) flash_key) == -1)
         {
-            safe_free(cipher_text, sizeof(char) * FLASH_PAGE_SIZE);
-            safe_free(plain_text, sizeof(char) * FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
+            safe_free(&cipher_text, sizeof(char) * FLASH_PAGE_SIZE);
+            safe_free(&plain_text, sizeof(char) * FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
             return -1;
         }
 
@@ -273,8 +273,8 @@ int mesh_flash_read(void* data, unsigned int flash_location, unsigned int flash_
         data += end_offset - current_offset;
     }
 
-    safe_free(cipher_text, sizeof(char) * FLASH_PAGE_SIZE);
-    safe_free(plain_text, sizeof(char) * FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
+    safe_free(&cipher_text, sizeof(char) * FLASH_PAGE_SIZE);
+    safe_free(&plain_text, sizeof(char) * FLASH_PAGE_SIZE - crypto_secretbox_NONCEBYTES);
 
     return 0;
 }
@@ -428,9 +428,9 @@ int mesh_play(char **args)
     cp_tp->cmd(cp_tp, 0, 4, cp_argv);
 
     // cleanup - this is here because boot may not execute following commands
-    safe_free(from_str, MAX_INT_STR_LENGTH);
-    safe_free(size_str, MAX_INT_STR_LENGTH);
-    safe_free(game_binary, size);
+    safe_free(&from_str, MAX_INT_STR_LENGTH);
+    safe_free(&size_str, MAX_INT_STR_LENGTH);
+    safe_free(&game_binary, size);
     
     // boot petalinux
     char * const boot_argv[2] = { "bootm", "0x10000000"};
@@ -525,7 +525,7 @@ int mesh_install(char **args)
             }
             memcpy(next, &row, sizeof(struct games_tbl_row));
             mesh_write_install_table();
-            safe_free(full_game_name, MAX_GAME_LENGTH + 1);
+            safe_free(&full_game_name, MAX_GAME_LENGTH + 1);
             return 0;
         }
     }
@@ -538,7 +538,7 @@ int mesh_install(char **args)
     mesh_write_install_table();
 
     printf("%s was successfully installed for %s\n", row.game_name, row.user_name);
-    safe_free(full_game_name, MAX_GAME_LENGTH + 1);
+    safe_free(&full_game_name, MAX_GAME_LENGTH + 1);
     return 0;
 }
 
@@ -579,10 +579,10 @@ int mesh_uninstall(char **args)
                 row->install_flag = MESH_TABLE_UNINSTALLED;
                 mesh_write_install_table();
                 printf("%s was successfully uninstalled for %s\n", args[1], user.name);
-                safe_free(full_name, malloced_size);
+                safe_free(&full_name, malloced_size);
                 break;
             }
-            safe_free(full_name, malloced_size);
+            safe_free(&full_name, malloced_size);
         }
     }
 
@@ -681,9 +681,9 @@ void mesh_loop(void) {
 
             args = mesh_split_line(line);
             status = mesh_execute(args);
-            safe_free(args, sizeof(char*) * MESH_TOK_BUFSIZE);
+            safe_free(&args, sizeof(char*) * MESH_TOK_BUFSIZE);
 
-            safe_free(line, sizeof(char) * MAX_STR_LEN);
+            safe_free(&line, sizeof(char) * MAX_STR_LEN);
 
             // -2 for exit
             if (status == MESH_SHUTDOWN)
@@ -782,7 +782,7 @@ int mesh_ls_iterate_dir(struct ext2fs_node *dir, char *fname)
                                (dirent.inode),
                                &fdiro->inode);
                 if (status == 0) {
-                    safe_free(fdiro, sizeof(struct ext2fs_node));
+                    safe_free(&fdiro, sizeof(struct ext2fs_node));
                     return 0;
                 }
                 fdiro->inode_read = 1;
@@ -813,7 +813,7 @@ int mesh_ls_iterate_dir(struct ext2fs_node *dir, char *fname)
                                  dirent.inode),
                                  &fdiro->inode);
                     if (status == 0) {
-                        safe_free(fdiro, sizeof(struct ext2fs_node));
+                        safe_free(&fdiro, sizeof(struct ext2fs_node));
                         return 0;
                     }
                     fdiro->inode_read = 1;
@@ -834,7 +834,7 @@ int mesh_ls_iterate_dir(struct ext2fs_node *dir, char *fname)
                     break;
                 }
             }
-            safe_free(fdiro, sizeof(struct ext2fs_node));
+            safe_free(&fdiro, sizeof(struct ext2fs_node));
         }
         fpos += le16_to_cpu(dirent.direntlen);
     }
@@ -1005,16 +1005,16 @@ void *safe_realloc(void *ptr, size_t size){
 }
 
 /*
- * @brief Clears memory before freeing
+ * @brief Clears memory before freeing. Also sets the pointer to NULL
  *
  * @params ptr A pointer to the memory to free
  * @params size The size of the memory to be freed
- * @return void
  */
-void safe_free(void* ptr, size_t size){
-    memset(ptr, 0, size);
-    free(ptr);
-    ptr = NULL;
+void safe_free(void** ptr, size_t size){
+    if (*ptr == NULL) {return;}
+    memset(*ptr, 0, size);
+    free(*ptr);
+    *ptr = NULL;
 }
 
 /**
@@ -1058,10 +1058,10 @@ int mesh_game_installed(char *game_name){
                 strcmp(user.name, row->user_name) == 0 &&
                 row->install_flag == MESH_TABLE_INSTALLED)
             {
-                safe_free(full_name, malloced_size);
+                safe_free(&full_name, malloced_size);
                 return 1;
             }
-            safe_free(full_name, malloced_size);
+            safe_free(&full_name, malloced_size);
         }
     }
 
@@ -1370,7 +1370,7 @@ int mesh_is_first_table_write(void)
     {
         ret = 1;
     }
-    safe_free(sentinel, sizeof(char) * MESH_SENTINEL_LENGTH);
+    safe_free(&sentinel, sizeof(char) * MESH_SENTINEL_LENGTH);
     return ret;
 }
 
@@ -1509,7 +1509,7 @@ char **mesh_split_line(char *line) {
             tokens_backup = tokens;
             tokens = safe_realloc(tokens, bufsize * sizeof(char*));
             if (!tokens) {
-                safe_free(tokens_backup, bufsize * sizeof(char*));
+                safe_free(&tokens_backup, bufsize * sizeof(char*));
             }
         }
 
@@ -1553,7 +1553,7 @@ void mesh_get_install_table(void)
                          sizeof(struct games_tbl_row) * installed_games_size);
         if (ret) {
             installed_games_size = 0;
-            safe_free(installed_games, sizeof(struct games_tbl_row) * installed_games_size);
+            safe_free(&installed_games, sizeof(struct games_tbl_row) * installed_games_size);
             mesh_init_table();
         }
     }
@@ -1575,7 +1575,7 @@ void mesh_write_install_table(void)
         memcpy(write_buffer+sizeof(unsigned int)*2, installed_games, installed_games_size*sizeof(struct games_tbl_row));
     }
     mesh_flash_write(write_buffer, MESH_SENTINEL_LOCATION, write_size);
-    safe_free(write_buffer, write_size);
+    safe_free(&write_buffer, write_size);
 }
 
 
@@ -1616,8 +1616,8 @@ int mesh_login(User *user) {
         printf("Login failed. Please try again\n");
     }
 
-    safe_free(tmp_name, sizeof(char) * MAX_STR_LEN);
-    safe_free(tmp_pin, sizeof(char) * MAX_STR_LEN);
+    safe_free(&tmp_name, sizeof(char) * MAX_STR_LEN);
+    safe_free(&tmp_pin, sizeof(char) * MAX_STR_LEN);
 
     return retval;
 }

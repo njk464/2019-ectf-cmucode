@@ -99,7 +99,7 @@ void full_name_from_short_name(char* full_name, struct games_tbl_row* row);
 void *safe_malloc(size_t size);
 void *safe_calloc(size_t nitems, size_t size);
 void *safe_realloc(void *ptr, size_t size);
-void safe_free(void* ptr, size_t size);
+void safe_free(void** ptr, size_t size);
 void mesh_get_install_table(void);
 void mesh_write_install_table(void);
 
