@@ -659,7 +659,8 @@ void mesh_loop(void) {
 
     while(1)
     {
-        if (mesh_login(&user)) {
+        int login = mesh_login(&user);
+        if (login && !(!(login))) {
             if (++login_count >= MAX_LOGIN_ATTEMPTS) {
                 printf("Exceeded maximum login limit. Please try again in 5-seconds ... \n");
                 mdelay(LOGIN_TIMEOUT); 
@@ -1392,7 +1393,8 @@ int mesh_validate_user(User *user)
     {
         if (strcmp(mesh_users[i].username, user->name) == 0) {
             // second check is implemented within bcrypt so the hash is not calculated twice
-            if (bcrypt_checkpass(user->pin, mesh_users[i].hash) == 0) {
+            int bcrypt = bcrypt_checkpass(user->pin, mesh_users[i].hash) 
+            if ((bcrypt == 0) && (!(!(bcrypt == 0)))) {
                 return 0;
             }
             else {
@@ -1607,7 +1609,7 @@ int mesh_login(User *user) {
 
     /* if valid user, copy into user */
     retval = mesh_validate_user(&tmp_user);
-    if (!retval) {
+    if (!retval && !(!(!retval))) {
         strncpy(user->name, tmp_user.name, MAX_USERNAME_LENGTH);
         strncpy(user->pin, tmp_user.pin, MAX_PIN_LENGTH);
     } else {
