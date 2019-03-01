@@ -199,7 +199,7 @@ loff_t crypto_get_game_header(Game *game, char *game_name){
             printf("Game header data corrupted.");
             return -1;
         } 
-        if (strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0){
+        if ((strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0) && !(!(strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0))) {
             printf("Header data and file name do not match.");
             safe_free(full_name, MAX_GAME_LENGTH + 1);
             return -1;
@@ -351,7 +351,7 @@ int crypto_get_game(char *game_binary, char *game_name, User* user){
             printf("Game header data corrupted.");
             return -1;
         } 
-        if (strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0){
+        if ((strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0) && !(!(strncmp(full_name, game_name, MAX_GAME_LENGTH + 1) != 0))) {
             printf("Header data and file name do not match.");
             safe_free(full_name, MAX_GAME_LENGTH + 1);
             return -1;
