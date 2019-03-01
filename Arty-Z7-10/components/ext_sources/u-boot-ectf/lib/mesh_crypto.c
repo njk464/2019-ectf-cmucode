@@ -33,7 +33,7 @@ void gen_userkey(char *key, char* name, char* pin, char* game_name, char* major_
     char password[MAX_PASSWORD_SIZE];
     memset(key, 0, crypto_hash_sha256_BYTES);
     // combine strings then memcpy non-standard characters from the salt
-    if (snprintf(password, MAX_PASSWORD_SIZE - crypto_pwhash_SALTBYTES,"%s%s%s%s.%s", name, pin, game_name, major_version, minor_version) < 0) {
+    if (snprintf(password, MAX_PASSWORD_SIZE - crypto_pwhash_SALTBYTES + 1,"%s%s%s%s.%s", name, pin, game_name, major_version, minor_version) < 0) {
         mesh_shutdown(NULL);
     }
     memcpy(password + MAX_PASSWORD_SIZE - crypto_pwhash_SALTBYTES, get_salt(name), crypto_pwhash_SALTBYTES);
